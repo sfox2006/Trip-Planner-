@@ -64,11 +64,25 @@ Use a recent browser supporting JavaScript modules, native `<dialog>`, `structur
 
 Sam authorized GitHub Pages publication of this local-first version. The manually dispatched `Publish Personal Trip Planner` workflow accepts `main` only, reruns the repository checks, and publishes an explicit allowlist of runtime files. Tests, screenshots, backups and repository tooling are excluded. The deployment job uses only `pages: write` and `id-token: write`; the build job has read access. Pages source must be set to GitHub Actions, with a `github-pages` deployment environment restricted to `main`. Publishing the app does not synchronize trip data. Future backend or credential changes require separate approval.
 
+The smallest manual setup is Settings → Pages → Source: GitHub Actions; Settings → Environments → `github-pages` → Deployment branches and tags: Selected branches and tags → add a Branch rule for `main`; then Actions → Publish Personal Trip Planner → Run workflow → `main`. A referenced environment is automatically created by GitHub if absent, but a custom workflow does not automatically add its main-only protection rule. Configure that restriction before the first run. No deployment secret, custom domain or paid upgrade is needed for this public repository. GitHub's Pages and environment configuration requires appropriate administrator integration access; this implementation does not bypass denied settings.
+
+## Add to your phone and use offline
+
+Choose **Add to home screen** near the bottom of the planner. On iPhone/iPad, open in Safari and choose Share → Add to Home Screen → Add. On supported Android browsers, the dialog offers the native Install app prompt when available; otherwise use Chrome's menu → Install app/Add to Home screen. Browser wording and installation support vary. The installed app uses the original compass icon and standalone display.
+
+Download a complete backup before installing. Safari and iOS home-screen apps may have different storage; if the new app starts empty, import the backup there. Installation does not copy data automatically, synchronize devices or create an account. Actual iOS/Android installation/storage behavior still needs device testing.
+
+Wait for **Offline copy ready** before relying on offline reopening. The service worker is scoped to the app's project path and caches only the public app shell, including its local PDF renderer; trip data and file blobs remain in localStorage/IndexedDB. It never caches uploaded attachments, backups or remote APIs. Device online/offline status describes the browser's network indication, not proof of internet availability or cloud synchronization. Browser cache/storage eviction can remove offline availability.
+
+Updates download a complete hash-verified shell into a separate cache. An inconsistent or failed download preserves the previous working copy. Updates wait until all planner tabs and home-screen windows close; reopening then applies the new release. Open forms are never force-reloaded. Saved data schema/keys remain unchanged. Cache cleanup touches only this app's scoped shell caches. Keep backups before updates; never clear website data merely to update.
+
+The offline release is packaged with `npm run build`; `npm run preview` serves the generated `_site/`. `npm start` serves editable source without registering an offline worker, so development changes remain immediately visible. GitHub Pages publication uses the packaged build. No framework or personal data is involved in packaging.
+
 ## First-version limits
 
 - Up to 100 trips, 500 plans per trip and 2,000 packing/expense/budget/link records per list. Total serialized planner data must remain below 2 MB so downloaded backups can be imported. Conflict details are capped at 100 overlapping pairs, with a count of the rest.
 - PDF/PNG/JPEG/WebP/GIF only, 5 MiB per file, 20 MiB and 100 attachments total per device/origin; images at most 20 megapixels where browser decoding is available. HTML/SVG and disguised unsupported types are rejected. Full backups are capped at 32 MiB; text remains capped at 2 MB. Browser quotas may be lower. Attachment files and text use separate storage transactions, with staging/rollback to preserve earlier data; they are not an encrypted vault.
-- No automatic sync, collaborative editing, cloud recovery, live availability, exchange rates, map embedding or offline app-shell cache. Backups are the transfer/recovery mechanism. Future authenticated sync requires an explicit architecture decision; none is provisioned here.
+- No automatic sync, collaborative editing, cloud recovery, live availability, exchange rates or map embedding. Backups are the transfer/recovery mechanism. Future authenticated sync requires an explicit architecture decision; none is provisioned here.
 - Reminders check recorded data only. They cannot verify bookings, travel time between venues, entry requirements, operating hours or whether a transport entry is actually your arrival/departure.
 - No recurring activities or drag-and-drop. The form is the reliable editing path. Modifying trip dates never silently deletes records: adjust out-of-range items first.
 - Calendar export is a snapshot. Repeated imports or calendar-client UID handling may create duplicates. Delete/replace old calendar imports in your calendar app as needed.
