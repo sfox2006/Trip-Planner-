@@ -9,8 +9,8 @@
     "test:browser": "node tests/browser.cjs",
     "start": "python3 -m http.server 8080 --bind 127.0.0.1",
     "test:a11y": "node tests/accessibility.cjs",
-    "format": "prettier --write app.js model.js attachments.js styles.css index.html tests package.json .github/workflows/checks.yml",
-    "format:check": "prettier --check app.js model.js attachments.js styles.css index.html tests package.json .github/workflows/checks.yml",
+    "format": "prettier --write app.js model.js attachments.js styles.css index.html tests package.json .github/workflows",
+    "format:check": "prettier --check app.js model.js attachments.js styles.css index.html tests package.json .github/workflows",
     "test:files": "node tests/attachments-browser.cjs"
   },
   "devDependencies": {
