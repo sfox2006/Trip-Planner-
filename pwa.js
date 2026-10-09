@@ -23,10 +23,15 @@ function renderState() {
       : failure
         ? "Offline copy unavailable. Reconnect and reopen to retry."
         : "Offline copy not ready yet.";
-  state.textContent = `${connection} · ${copy} Plans stay on this device; no automatic sync.`;
+  const sync =
+    $("sync-state")?.dataset.connected === "true"
+      ? "Private sync connected; check its save status."
+      : "Plans stay on this device; no automatic sync.";
+  state.textContent = `${connection} · ${copy} ${sync}`;
   button.hidden = installed();
   nativeButton.hidden = !installPrompt;
 }
+document.addEventListener("ptp-sync-state", renderState);
 button.onclick = () => {
   opener = document.activeElement;
   $("install-message").textContent = "";

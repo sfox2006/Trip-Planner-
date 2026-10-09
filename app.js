@@ -1,5 +1,6 @@
 import {
   files,
+  fileFingerprint,
   makeRecords,
   filename,
   ownedFiles,
@@ -43,6 +44,7 @@ const button = (text, action, cls = "button") => {
   b.addEventListener("click", action);
   return b;
 };
+let syncWriteBusy = false;
 let fileBusy = 0,
   previewSequence = 0;
 let attachmentRows = [],
@@ -87,6 +89,8 @@ function storageWarning(text) {
 try {
   lastSaved = localStorage.getItem(STORAGE_KEY);
   if (lastSaved) data = parseBackup(lastSaved);
+  else if (localStorage.getItem("personal-trip-planner.sync-projection"))
+    localStorage.setItem("personal-trip-planner.sync-reset", uid());
 } catch (e) {
   blockedStorage = true;
   storageWarning(
@@ -190,6 +194,8 @@ function notify(text) {
   noticeTimer = setTimeout(() => ($("notice").hidden = true), 4500);
 }
 function commit(next) {
+  if (syncWriteBusy)
+    throw Error("Wait for the current sync refresh before editing.");
   validate(next);
   if (!blockedStorage) {
     try {
@@ -213,6 +219,7 @@ function commit(next) {
   data = next;
   render();
   void cleanupAttachments();
+  document.dispatchEvent(new Event("ptp-local-change"));
 }
 function updateTrip(update) {
   const next = structuredClone(data),
@@ -1440,7 +1447,7 @@ if (blockedStorage) {
     el(
       "p",
       "",
-      "Download the original stored content before resetting. Reset removes only this planner’s storage key; current in-memory trips will be saved.",
+      "Download the original stored content before resetting. Reset replaces this planner’s saved text with current in-memory trips. Connected sync will require recovery before continuing; account copies are kept.",
     ),
   );
   card.append(
@@ -1466,6 +1473,8 @@ if (blockedStorage) {
           "Reset planner storage?",
           "This removes the original saved planner data. Save the recovery file first. Current in-memory trips will replace it.",
           () => {
+            localStorage.setItem("personal-trip-planner.sync-reset", uid());
+            document.dispatchEvent(new Event("ptp-local-reset"));
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             lastSaved = JSON.stringify(data);
             blockedStorage = false;
@@ -1512,6 +1521,7 @@ function persistRequired(next) {
   data = next;
 }
 function announceFileChange() {
+  document.dispatchEvent(new Event("ptp-local-change"));
   try {
     localStorage.setItem("personal-trip-planner.files-revision", uid());
   } catch {
@@ -1789,3 +1799,147 @@ $("export-text-only").onclick = () =>
     "application/json",
     "personal-trip-planner-text-only-backup.json",
   );
+
+// Narrow, guarded projection bridge for the optional sync module. Auth sessions
+// and cloud configuration never enter planner data or ordinary backups.
+export const plannerBridge = {
+  async snapshot() {
+    assertFileParent();
+    if (fileBusy || syncWriteBusy)
+      throw Error("Wait for the current file/sync operation to finish.");
+    const raw = lastSaved,
+      revision = localStorage.getItem("personal-trip-planner.files-revision"),
+      rows = await files.list(),
+      fileMarker = await files.projectionMarker(),
+      projectionMarker = localStorage.getItem(
+        "personal-trip-planner.sync-projection",
+      ),
+      resetMarker = localStorage.getItem("personal-trip-planner.sync-reset");
+    if (
+      localStorage.getItem(STORAGE_KEY) !== raw ||
+      localStorage.getItem("personal-trip-planner.files-revision") !== revision
+    )
+      throw Error("Plans/files changed in another tab. Reload before syncing.");
+    if (rows.some((r) => r.pending))
+      throw Error(
+        "A file operation in this or another tab is still pending. Wait or reload before syncing.",
+      );
+    return {
+      planner: structuredClone(data),
+      records: ownedFiles(data, rows),
+      token: {
+        raw,
+        revision,
+        fileMarker,
+        projectionMarker,
+        resetMarker,
+        fingerprint: fileFingerprint(rows),
+        originalRows: rows,
+      },
+    };
+  },
+  async apply(next, token) {
+    validate(next.planner);
+    assertFileParent();
+    if (
+      fileBusy ||
+      syncWriteBusy ||
+      [...document.querySelectorAll("dialog[open]")].some(
+        (d) => d.id !== "sync-dialog",
+      )
+    )
+      throw Error(
+        "Save/close open edits or file previews before applying sync changes. Your recovery copy is kept.",
+      );
+    if (
+      localStorage.getItem("personal-trip-planner.sync-reset") !==
+        token.resetMarker ||
+      localStorage.getItem("personal-trip-planner.sync-projection") !==
+        token.projectionMarker ||
+      localStorage.getItem(STORAGE_KEY) !== token.raw ||
+      localStorage.getItem("personal-trip-planner.files-revision") !==
+        token.revision
+    )
+      throw Error(
+        "Plans changed during sync. Device changes and recovery copies are kept; reload before continuing.",
+      );
+    syncWriteBusy = true;
+    fileBusy++;
+    let replaced = false;
+    const projectionMarker = token.projectionMarker || uid();
+    try {
+      await files.replaceAll(
+        next.records,
+        token.fingerprint,
+        projectionMarker,
+        token.fileMarker,
+      );
+      replaced = true;
+      if (
+        localStorage.getItem("personal-trip-planner.sync-reset") !==
+          token.resetMarker ||
+        localStorage.getItem("personal-trip-planner.sync-projection") !==
+          token.projectionMarker ||
+        localStorage.getItem(STORAGE_KEY) !== token.raw ||
+        localStorage.getItem("personal-trip-planner.files-revision") !==
+          token.revision
+      )
+        throw Error(
+          "Another tab edited during refresh. Those changes are kept; use the saved recovery copy if needed.",
+        );
+      const raw = JSON.stringify(next.planner);
+      localStorage.setItem(
+        "personal-trip-planner.sync-projection",
+        projectionMarker,
+      );
+      localStorage.setItem(STORAGE_KEY, raw);
+      data = structuredClone(next.planner);
+      lastSaved = raw;
+      for (const url of fileURLs.values()) URL.revokeObjectURL(url);
+      fileURLs.clear();
+      const t = data.trips.find((t) => t.id === selected) || data.trips[0];
+      if (t) {
+        if (t.id !== selected) restoreTrip(t.id);
+        if (day < t.start || day > t.end) day = t.start;
+      } else {
+        selected = "";
+        day = "";
+      }
+      await refreshFiles();
+      announceFileChange();
+    } catch (error) {
+      // Roll back only our exact file projection. A concurrent edit prevents
+      // rollback; the sync journal retains the complete original binary copy.
+      if (replaced && localStorage.getItem(STORAGE_KEY) === token.raw) {
+        try {
+          await files.replaceAll(
+            token.originalRows,
+            fileFingerprint(next.records),
+            token.fileMarker,
+            projectionMarker,
+          );
+          if (token.projectionMarker)
+            localStorage.setItem(
+              "personal-trip-planner.sync-projection",
+              token.projectionMarker,
+            );
+          else localStorage.removeItem("personal-trip-planner.sync-projection");
+          await refreshFiles();
+        } catch {
+          attachmentWarning(
+            "Device refresh failed and files changed concurrently. Download the private-sync recovery backup before continuing.",
+          );
+        }
+      }
+      throw error;
+    } finally {
+      syncWriteBusy = false;
+      fileBusy--;
+      render();
+    }
+  },
+  subscribe(callback) {
+    document.addEventListener("ptp-local-change", callback);
+    return () => document.removeEventListener("ptp-local-change", callback);
+  },
+};

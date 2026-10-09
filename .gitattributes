@@ -1,0 +1,2 @@
+# The generated SDK contains meaningful whitespace inside template literals.
+/vendor/supabase.mjs -whitespace

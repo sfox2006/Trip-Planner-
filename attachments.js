@@ -78,9 +78,13 @@ function db() {
       reject(Error("This browser does not support file storage."));
       return;
     }
-    const request = indexedDB.open("personal-trip-planner-files", 1);
-    request.onupgradeneeded = () =>
-      request.result.createObjectStore("attachments", { keyPath: "id" });
+    const request = indexedDB.open("personal-trip-planner-files", 2);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains("attachments"))
+        request.result.createObjectStore("attachments", { keyPath: "id" });
+      if (!request.result.objectStoreNames.contains("control"))
+        request.result.createObjectStore("control");
+    };
     request.onsuccess = () => {
       request.result.onversionchange = () => {
         request.result.close();
@@ -97,10 +101,10 @@ function db() {
   });
   return connection;
 }
-async function transaction(mode, action) {
+async function transaction(mode, action, stores = "attachments") {
   const database = await db();
   return new Promise((resolve, reject) => {
-    const tx = database.transaction("attachments", mode),
+    const tx = database.transaction(stores, mode),
       store = tx.objectStore("attachments");
     let result;
     tx.oncomplete = () => resolve(result);
@@ -121,7 +125,31 @@ async function transaction(mode, action) {
     }
   });
 }
+export function fileFingerprint(rows) {
+  return JSON.stringify(
+    rows
+      .map((r) => [
+        r.id,
+        r.tripId,
+        r.planId,
+        r.name,
+        r.type,
+        r.size,
+        Boolean(r.pending),
+      ])
+      .sort((a, b) => a[0].localeCompare(b[0])),
+  );
+}
 export const files = {
+  projectionMarker: () =>
+    transaction(
+      "readonly",
+      (_s, done, tx) => {
+        const r = tx.objectStore("control").get("sync-projection");
+        r.onsuccess = () => done(r.result || null);
+      },
+      ["attachments", "control"],
+    ),
   list: () =>
     transaction("readonly", (s, done) => {
       const r = s.getAll();
@@ -147,6 +175,41 @@ export const files = {
         done(true);
       };
     }),
+  replaceAll: (
+    records,
+    expectedFingerprint,
+    marker = undefined,
+    expectedMarker = undefined,
+  ) =>
+    transaction(
+      "readwrite",
+      (s, done, tx) => {
+        const control = tx.objectStore("control"),
+          previousMarker = control.get("sync-projection");
+        const req = s.getAll();
+        req.onsuccess = () => {
+          if (
+            fileFingerprint(req.result) !== expectedFingerprint ||
+            (expectedMarker !== undefined &&
+              (previousMarker.result || null) !== expectedMarker) ||
+            records.length > MAX_COUNT ||
+            records.reduce((n, r) => n + r.size, 0) > MAX_TOTAL
+          ) {
+            done(false);
+            tx.abort();
+            return;
+          }
+          if (marker !== undefined) {
+            if (marker === null) control.delete("sync-projection");
+            else control.put(marker, "sync-projection");
+          }
+          s.clear();
+          for (const r of records) s.put({ ...r, pending: false });
+          done(true);
+        };
+      },
+      ["attachments", "control"],
+    ),
   finalize: (ids) =>
     transaction("readwrite", (s) => {
       for (const id of ids) {

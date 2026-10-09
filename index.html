@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="styles.css" />
     <script type="module" src="app.js"></script>
     <script type="module" src="pwa.js"></script>
+    <script type="module" src="sync-ui.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to trip plan</a>
@@ -108,7 +109,7 @@
             <span>◇ Day-by-day plans</span><span>✓ Packing &amp; expenses</span
             ><span>↗ Local backups</span>
           </div>
-          <p class="privacy-note">
+          <p class="privacy-note" id="welcome-privacy">
             Same browser, same device. No account, analytics or automatic sync.
           </p>
         </div>
@@ -285,12 +286,159 @@
             Add to home screen
           </button>
         </div>
+        <div class="sync-bar">
+          <p id="sync-state" class="muted" role="status">
+            Cloud sync is not configured. Plans stay on this device.
+          </p>
+          <button id="sync-open" class="button quiet">Private sync</button>
+        </div>
         <footer>
           <span>Personal Trip Planner</span
           ><span>Less juggling. More exploring.</span>
         </footer>
       </main>
     </div>
+    <dialog id="sync-dialog" aria-labelledby="sync-title">
+      <div class="dialog-heading">
+        <h2 id="sync-title">Your trips, on your devices.</h2>
+        <button
+          id="sync-close"
+          class="icon-button"
+          aria-label="Close private sync"
+        >
+          ×
+        </button>
+      </div>
+      <p id="sync-message" role="status">
+        Cloud sync is not configured. Plans stay on this device.
+      </p>
+      <p class="muted">
+        Connect the same confirmed individual account on phone and computer.
+        Cloud copies use owner-only access; they are not end-to-end encrypted.
+        Local files and any remembered login can be read by trusted scripts on
+        this website’s shared origin. Keep a complete local backup.
+      </p>
+      <div id="sync-disabled">
+        <p>
+          Private backend setup and access tests are still needed. Sign-in is
+          unavailable and no trip data is sent.
+        </p>
+      </div>
+      <form id="sync-auth" hidden>
+        <label
+          >Email<input
+            id="sync-email"
+            type="email"
+            required
+            maxlength="254"
+            autocomplete="username"
+        /></label>
+        <label
+          >Password<input
+            id="sync-password"
+            type="password"
+            required
+            minlength="1"
+            maxlength="200"
+            autocomplete="current-password"
+        /></label>
+        <label class="check-label"
+          ><input id="sync-remember" type="checkbox" />Remember login on this
+          browser</label
+        >
+        <p class="muted">
+          Leave unchecked on shared devices. Passwords are never saved in
+          planner backups.
+        </p>
+        <div class="dialog-actions">
+          <button class="button primary" type="submit" value="signin">
+            Sign in</button
+          ><button class="button" type="submit" value="signup">
+            Create account
+          </button>
+        </div>
+        <div class="sync-secondary">
+          <button id="sync-resend" type="button" class="text-button">
+            Resend confirmation</button
+          ><button id="sync-recover" type="button" class="text-button">
+            Reset password
+          </button>
+        </div>
+      </form>
+      <div id="sync-account" hidden>
+        <p id="sync-identity"></p>
+        <div id="sync-join">
+          <p id="sync-join-counts">
+            Connect to merge the device and account copies. Exact imported
+            duplicates are kept once; edited trips remain separate.
+          </p>
+          <button id="sync-connect" class="button primary">
+            Connect and merge private trips
+          </button>
+        </div>
+        <div id="sync-connected" hidden>
+          <div class="dialog-actions">
+            <button id="sync-now" class="button primary">Sync now</button
+            ><button id="sync-verify" class="button">Check cloud files</button>
+          </div>
+          <div class="sync-secondary">
+            <button id="sync-repair" class="text-button" hidden>
+              Repair cloud files from device originals</button
+            ><button id="sync-cleanup-open" class="text-button">
+              Review unfinished uploads
+            </button>
+          </div>
+        </div>
+        <form id="sync-new-password" hidden>
+          <label
+            >New password<input
+              id="sync-new-password-value"
+              type="password"
+              required
+              minlength="8"
+              maxlength="200"
+              autocomplete="new-password" /></label
+          ><button class="button primary" type="submit">
+            Save new password
+          </button>
+        </form>
+        <button id="sync-signout" class="button quiet">
+          Sign out on this device
+        </button>
+      </div>
+      <form id="sync-conflicts" hidden>
+        <h3>Keep the versions you need</h3>
+        <p>
+          Competing edits are kept in the recovery copy. Keep the cloud trip, or
+          keep it plus a separate device copy with fresh IDs. A deleted cloud
+          trip can be restored only as a new copy.
+        </p>
+        <div id="sync-conflict-choices"></div>
+        <button class="button primary" type="submit">
+          Save choices on device
+        </button>
+      </form>
+      <div id="sync-recovery" hidden>
+        <h3>Recovery on this device</h3>
+        <button id="sync-recovery-download" class="button">
+          Download private recovery backup</button
+        ><button id="sync-recovery-restore" class="button quiet" hidden>
+          Restore original device copy
+        </button>
+      </div>
+      <form id="sync-cleanup" hidden>
+        <h3>Unfinished private uploads</h3>
+        <p>
+          Unused reservations count toward your file limit. Select only
+          abandoned uploads to remove. Saved and pending file references are
+          protected.
+        </p>
+        <div id="sync-cleanup-list"></div>
+        <button class="button destructive" type="submit">
+          Remove selected unused uploads
+        </button>
+      </form>
+    </dialog>
     <dialog id="install-dialog" aria-labelledby="install-title">
       <div class="dialog-heading">
         <h2 id="install-title">Your planner, one tap away.</h2>
@@ -369,7 +517,7 @@
           ×
         </button>
       </div>
-      <p>
+      <p id="backup-storage-model">
         Trips are saved in <strong>this browser on this device</strong>. There
         is no account, cloud storage or automatic sync. Other people using this
         browser can see your plans.

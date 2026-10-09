@@ -13,6 +13,10 @@ A reusable, mobile-friendly trip planner. Start empty, create a trip, or explore
 - Local JSON backup download, validated import preview and append-only import with fresh IDs. Existing trips are preserved; importing the same backup twice intentionally creates two copies.
 - Full-trip calendar (.ics) export and a printable itinerary, including all days regardless of current filters. Print includes packing, expenses and links. Suggested calendar items are tentative; booked items are confirmed. Neither status confirms a reservation with a provider.
 
+## Optional private-sync draft
+
+The frontend includes a **disabled** private-sync implementation. This build has no configured backend or key, makes no Auth/cloud requests, and retains same-device storage. [Setup, ownership/merge/recovery behavior and the separate approval/live-verification gate](docs/PRIVATE_SYNC.md) are documented for reviewers. A draft implementation is not a claim of available or tested cloud sync.
+
 ## Privacy and storage
 
 **This repository is public. Real travel information must never be committed.** Source, fixtures and the optional demo contain only fictional examples. Enter actual itinerary details privately in the running app, or import your own local backup.
@@ -56,7 +60,7 @@ npm run test:files
 npm run test:a11y
 ```
 
-The browser suites start local servers on ports 8093–8095. They use system `/usr/bin/chromium` if present, or Playwright Chromium. Override with `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. They write fictional-only screenshots, a PDF and reports to ignored `test-results/`. Tests cover CRUD, storage/reload, filters/date navigation, keyboard access, DST validation, conflicts, backups/import rejection, calendar export, printing, narrow mobile screens, corrupt/unavailable storage and concurrent tabs. File checks cover PDF/photo preview, reload, byte-exact backup/import/download, multi-trip deletion isolation, quota errors and interrupted-import durability. Axe checks cover nine desktop/mobile/empty/dialog states plus attachments and PDF preview. Unit tests cover leap days, DST gaps/folds (including half-hour changes), skipped civil dates, date-line travel, strict imports/file validation, ICS escaping/folding, currency totals and backup identity preservation.
+The browser suites start local servers on ports 8093–8095, 8097 and 8100. They use system `/usr/bin/chromium` if present, or Playwright Chromium. Override with `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. They write fictional-only screenshots, a PDF and reports to ignored `test-results/`. Tests cover CRUD, storage/reload, filters/date navigation, keyboard access, DST validation, conflicts, backups/import rejection, calendar export, printing, narrow mobile screens, corrupt/unavailable storage and concurrent tabs. File checks cover PDF/photo preview, reload, byte-exact backup/import/download, multi-trip deletion isolation, quota errors and interrupted-import durability. Axe checks cover nine desktop/mobile/empty/dialog states plus attachments and PDF preview. Unit tests cover leap days, DST gaps/folds (including half-hour changes), skipped civil dates, date-line travel, strict imports/file validation, ICS escaping/folding, currency totals and backup identity preservation.
 
 Use a recent browser supporting JavaScript modules, native `<dialog>`, `structuredClone`, `crypto.randomUUID` and `Intl`. Serve from HTTP localhost or HTTPS. Opening the HTML directly via `file://` is not supported. The relative file paths work under a repository subpath.
 
@@ -82,7 +86,7 @@ The offline release is packaged with `npm run build`; `npm run preview` serves t
 
 - Up to 100 trips, 500 plans per trip and 2,000 packing/expense/budget/link records per list. Total serialized planner data must remain below 2 MB so downloaded backups can be imported. Conflict details are capped at 100 overlapping pairs, with a count of the rest.
 - PDF/PNG/JPEG/WebP/GIF only, 5 MiB per file, 20 MiB and 100 attachments total per device/origin; images at most 20 megapixels where browser decoding is available. HTML/SVG and disguised unsupported types are rejected. Full backups are capped at 32 MiB; text remains capped at 2 MB. Browser quotas may be lower. Attachment files and text use separate storage transactions, with staging/rollback to preserve earlier data; they are not an encrypted vault.
-- No automatic sync, collaborative editing, cloud recovery, live availability, exchange rates or map embedding. Backups are the transfer/recovery mechanism. Future authenticated sync requires an explicit architecture decision; none is provisioned here.
+- This build has no enabled automatic sync/cloud recovery, collaborative editing, live availability, exchange rates or map embedding. Local backups remain the transfer/recovery mechanism. The optional Auth/sync code is disabled pending separate backend approval and live verification.
 - Reminders check recorded data only. They cannot verify bookings, travel time between venues, entry requirements, operating hours or whether a transport entry is actually your arrival/departure.
 - No recurring activities or drag-and-drop. The form is the reliable editing path. Modifying trip dates never silently deletes records: adjust out-of-range items first.
 - Calendar export is a snapshot. Repeated imports or calendar-client UID handling may create duplicates. Delete/replace old calendar imports in your calendar app as needed.
