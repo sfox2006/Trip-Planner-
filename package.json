@@ -4,17 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/model.test.js",
-    "check": "node --check app.js && node --check model.js",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check app.js && node --check model.js && node --check attachments.js",
     "test:browser": "node tests/browser.cjs",
     "start": "python3 -m http.server 8080 --bind 127.0.0.1",
     "test:a11y": "node tests/accessibility.cjs",
-    "format": "prettier --write app.js model.js styles.css index.html tests package.json .github/workflows/checks.yml",
-    "format:check": "prettier --check app.js model.js styles.css index.html tests package.json .github/workflows/checks.yml"
+    "format": "prettier --write app.js model.js attachments.js styles.css index.html tests package.json .github/workflows/checks.yml",
+    "format:check": "prettier --check app.js model.js attachments.js styles.css index.html tests package.json .github/workflows/checks.yml",
+    "test:files": "node tests/attachments-browser.cjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "playwright": "1.62.1",
     "prettier": "3.9.9"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299"
   }
 }

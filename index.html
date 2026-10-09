@@ -14,7 +14,7 @@
     <meta name="referrer" content="no-referrer" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; worker-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>Personal Trip Planner</title>
     <link rel="icon" type="image/svg+xml" href="assets/compass.svg" />
@@ -40,6 +40,12 @@
       </div>
     </header>
     <div id="storage-warning" class="storage-warning" role="alert" hidden></div>
+    <div
+      id="attachment-warning"
+      class="storage-warning"
+      role="alert"
+      hidden
+    ></div>
     <div class="shell">
       <aside class="sidebar" aria-label="Your trips">
         <div class="sidebar-title">
@@ -320,16 +326,23 @@
       </p>
       <div class="backup-card">
         <h3>Save a local copy</h3>
-        <p>Download all trips as a JSON file. Nothing is uploaded.</p>
+        <p>
+          Download all trips and their PDF/photo attachments in one JSON file.
+          Nothing is uploaded.
+        </p>
         <button id="export-backup" class="button primary">
           Download backup
         </button>
       </div>
+      <button id="export-text-only" class="text-button">
+        Download trip text only (no files)
+      </button>
       <div class="backup-card">
         <h3>Bring your plans back</h3>
         <p>
-          Import a planner backup (up to 2 MB). Review it first; existing trips
-          stay intact. Imported trips are added as separate copies.
+          Import a planner backup (up to 32 MB including files; planner text up
+          to 2 MB). Review it first; existing trips stay intact. Imported trips
+          are added as separate copies.
         </p>
         <label class="file-label"
           >Choose backup file<input
@@ -357,6 +370,25 @@
         <button id="confirm-cancel" class="button">Keep it</button
         ><button id="confirm-delete" class="button destructive">Delete</button>
       </div>
+    </dialog>
+    <dialog id="attachment-preview" aria-labelledby="attachment-preview-title">
+      <div class="dialog-heading">
+        <h2 id="attachment-preview-title"></h2>
+        <button
+          id="attachment-preview-close"
+          class="icon-button"
+          aria-label="Close file preview"
+        >
+          ×
+        </button>
+      </div>
+      <p id="attachment-preview-status" role="status"></p>
+      <div id="attachment-preview-content"></div>
+      <p class="muted">
+        PDF preview shows the first page. PDF scripts, links and embedded
+        actions are not executed. Download to view all pages.
+      </p>
+      <div id="attachment-preview-actions" class="dialog-actions"></div>
     </dialog>
     <div
       id="notice"

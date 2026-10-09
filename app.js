@@ -1,4 +1,14 @@
 import {
+  files,
+  makeRecords,
+  filename,
+  ownedFiles,
+  portableBackup,
+  readPortableBackup,
+  remapImport,
+  MAX_BACKUP,
+} from "./attachments.js";
+import {
   STORAGE_KEY,
   blank,
   uid,
@@ -33,6 +43,13 @@ const button = (text, action, cls = "button") => {
   b.addEventListener("click", action);
   return b;
 };
+let fileBusy = 0,
+  previewSequence = 0;
+let attachmentRows = [],
+  filesReady = false;
+const fileURLs = new Map();
+let previewTask = null,
+  previewRender = null;
 const tripStates = new Map();
 let tripQuery = "",
   tripDateFilter = "all";
@@ -195,6 +212,7 @@ function commit(next) {
   }
   data = next;
   render();
+  void cleanupAttachments();
 }
 function updateTrip(update) {
   const next = structuredClone(data),
@@ -211,7 +229,12 @@ function closeDialog(id) {
   if (dialogOpener?.isConnected) dialogOpener.focus();
   else $("main").focus({ preventScroll: true });
 }
-for (const id of ["editor", "backup-dialog", "confirm-dialog"]) {
+for (const id of [
+  "editor",
+  "backup-dialog",
+  "confirm-dialog",
+  "attachment-preview",
+]) {
   const dialog = $(id);
   dialog.addEventListener("close", () => {
     if (dialogOpener?.isConnected) dialogOpener.focus();
@@ -243,10 +266,10 @@ function confirm(title, description, action) {
   openDialog("confirm-dialog");
 }
 $("confirm-cancel").onclick = () => closeDialog("confirm-dialog");
-$("confirm-delete").onclick = () => {
+$("confirm-delete").onclick = async () => {
   closeDialog("confirm-dialog");
   try {
-    confirmAction();
+    await confirmAction();
     notify("Deleted.");
   } catch (e) {
     notify(e.message);
@@ -514,6 +537,7 @@ function itemCard(i, fullDates = false) {
     ),
   );
   append(copy, actions);
+  renderAttachments(copy, i, fullDates);
   append(card, time, copy);
   return card;
 }
@@ -763,6 +787,7 @@ function hint(text) {
 }
 function startEditor(title, build, save) {
   editorConfig = { save };
+  $("editor-form").querySelector("button[type=submit]").disabled = false;
   $("editor-title").textContent = title;
   $("editor-fields").replaceChildren();
   $("editor-error").hidden = true;
@@ -771,21 +796,30 @@ function startEditor(title, build, save) {
 }
 $("editor-close").onclick = $("editor-cancel").onclick = () =>
   closeDialog("editor");
-$("editor-form").onsubmit = (e) => {
+$("editor-form").onsubmit = async (e) => {
   e.preventDefault();
+  const config = editorConfig,
+    submit = e.target.querySelector("button[type=submit]");
+  submit.disabled = true;
   try {
     const values = Object.fromEntries(new FormData(e.target));
-    editorConfig.save(values);
-    closeDialog("editor");
-    notify(
-      blockedStorage
-        ? "Changes kept in this tab only. Download a backup."
-        : "Saved on this device.",
-    );
+    await config.save(values);
+    if (config === editorConfig && $("editor").open) {
+      closeDialog("editor");
+      notify(
+        blockedStorage
+          ? "Changes kept in this tab only. Download a backup."
+          : "Saved on this device.",
+      );
+    }
   } catch (error) {
-    $("editor-error").textContent = error.message;
-    $("editor-error").hidden = false;
-    $("editor-error").scrollIntoView({ block: "nearest" });
+    if (config === editorConfig && $("editor").open) {
+      $("editor-error").textContent = error.message;
+      $("editor-error").hidden = false;
+      $("editor-error").scrollIntoView({ block: "nearest" });
+    }
+  } finally {
+    if (config === editorConfig) submit.disabled = false;
   }
 };
 function editTrip(existing) {
@@ -1145,21 +1179,38 @@ function openBackup() {
   openDialog("backup-dialog");
 }
 $("backup-open").onclick = openBackup;
-$("sidebar-backup").onclick = () =>
-  download(
-    JSON.stringify(data),
-    "application/json",
-    "personal-trip-planner-backup.json",
-  );
+async function exportFullBackup() {
+  try {
+    if (!filesReady)
+      throw Error(
+        "File storage is unavailable. Use Download trip text only in Backup & privacy, or reload for a complete file backup.",
+      );
+    if (fileBusy)
+      throw Error("Wait for the file operation to finish before backing up.");
+    const snapshot = data,
+      saved = lastSaved,
+      revision = localStorage.getItem("personal-trip-planner.files-revision");
+    notify("Preparing local backup including files…");
+    const output = await portableBackup(snapshot, await files.list());
+    if (
+      data !== snapshot ||
+      localStorage.getItem(STORAGE_KEY) !== saved ||
+      localStorage.getItem("personal-trip-planner.files-revision") !==
+        revision ||
+      fileBusy
+    )
+      throw Error(
+        "Plans or files changed while the backup was prepared. Please retry.",
+      );
+    download(output, "application/json", "personal-trip-planner-backup.json");
+    notify("Trips and files backed up locally. Keep the file safe.");
+  } catch (e) {
+    notify(e.message);
+  }
+}
+$("sidebar-backup").onclick = exportFullBackup;
+$("export-backup").onclick = exportFullBackup;
 $("backup-close").onclick = () => closeDialog("backup-dialog");
-$("export-backup").onclick = () => {
-  download(
-    JSON.stringify(data),
-    "application/json",
-    "personal-trip-planner-backup.json",
-  );
-  notify("Local backup downloaded. Keep it somewhere safe.");
-};
 $("import-file").onchange = async (e) => {
   const sequence = ++importSequence;
   pendingImport = null;
@@ -1169,23 +1220,23 @@ $("import-file").onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    if (file.size > 2 * 1024 * 1024)
-      throw Error("Backup must be smaller than 2 MB.");
-    const incoming = parseBackup(await file.text());
+    if (file.size > MAX_BACKUP)
+      throw Error("Full backup must be smaller than 32 MB.");
+    const incoming = await readPortableBackup(await file.text());
     if (sequence !== importSequence) return;
-    if (!incoming.trips.length)
+    if (!incoming.planner.trips.length)
       throw Error("This backup has no trips to import.");
-    mergeBackup(data, incoming);
+    remapImport(data, incoming);
     pendingImport = incoming;
     const h = $("import-preview");
     h.replaceChildren(
       el(
         "strong",
         "",
-        `Ready to add ${incoming.trips.length} ${incoming.trips.length === 1 ? "trip" : "trips"}:`,
+        `Ready to add ${incoming.planner.trips.length} trips and ${incoming.attachments.length} files:`,
       ),
     );
-    for (const t of incoming.trips)
+    for (const t of incoming.planner.trips)
       h.append(
         el(
           "p",
@@ -1201,25 +1252,80 @@ $("import-file").onchange = async (e) => {
     $("import-error").hidden = false;
   }
 };
-$("confirm-import").onclick = () => {
+$("confirm-import").onclick = async () => {
   if (!pendingImport) return;
+  if (fileBusy) {
+    $("import-error").textContent =
+      "Wait for the current file operation to finish.";
+    $("import-error").hidden = false;
+    return;
+  }
+  fileBusy++;
+  const button = $("confirm-import"),
+    sequence = importSequence,
+    before = data;
+  button.disabled = true;
+  $("backup-close").disabled = true;
+  $("import-file").disabled = true;
+  let added = [],
+    plannerCommitted = false;
   try {
-    const next = mergeBackup(data, pendingImport),
-      id = next.trips[data.trips.length].id;
-    commit(next);
+    const next = remapImport(before, pendingImport),
+      id = next.planner.trips[before.trips.length].id;
+    if (next.attachments.length) {
+      assertFileParent();
+      await files.add(next.attachments);
+      added = next.attachments.map((r) => r.id);
+      if (data !== before)
+        throw Error(
+          "Plans changed during import. Retry to preserve your latest edits.",
+        );
+      persistRequired(next.planner);
+    } else commit(next.planner);
+    plannerCommitted = true;
+    if (added.length) await files.finalize(added);
+    announceFileChange();
+    await refreshFiles();
     activateTrip(id);
     pendingImport = null;
-    closeDialog("backup-dialog");
+    if (sequence === importSequence) closeDialog("backup-dialog");
     notify(
       blockedStorage
         ? "Imported in this tab only. Download a backup."
-        : "Imported as separate copies. Existing trips kept.",
+        : "Trips and files imported as separate copies. Existing trips kept.",
     );
   } catch (e) {
-    $("import-error").textContent = e.message;
-    $("import-error").hidden = false;
+    if (!plannerCommitted && added.length)
+      try {
+        await files.remove(added);
+      } catch {
+        attachmentWarning(
+          "Imported file rollback failed. Reload after ten minutes to clean up staged files.",
+        );
+      }
+    if (plannerCommitted) {
+      pendingImport = null;
+      attachmentWarning(
+        blockedStorage
+          ? `Imported trip text is held in this tab only, but the view could not refresh. Download a text-only backup before closing or reloading. ${e.message}`
+          : `Import was saved, but the view could not refresh. Reload to see the imported trips and files. ${e.message}`,
+      );
+    } else {
+      $("import-error").textContent = e.message;
+      $("import-error").hidden = false;
+    }
+  } finally {
+    fileBusy--;
+    button.disabled = false;
+    $("backup-close").disabled = false;
+    $("import-file").disabled = false;
+    render();
+    void cleanupAttachments();
   }
 };
+$("backup-dialog").addEventListener("cancel", (e) => {
+  if ($("confirm-import").disabled) e.preventDefault();
+});
 $("calendar-export").onclick = () => {
   try {
     if (!trip().items.length) {
@@ -1315,6 +1421,12 @@ window.addEventListener("beforeprint", () => {
 });
 window.addEventListener("afterprint", () => $("print-view").replaceChildren());
 window.addEventListener("storage", (event) => {
+  if (event.key === "personal-trip-planner.files-revision") {
+    void refreshFiles().catch((e) =>
+      attachmentWarning(`File refresh failed. Reload to retry. ${e.message}`),
+    );
+    return;
+  }
   if (event.key !== STORAGE_KEY) return;
   storageWarning(
     "Plans changed in another tab. Reload this page before saving to avoid overwriting them. Download a backup first if you have unsaved changes.",
@@ -1368,3 +1480,312 @@ if (blockedStorage) {
   $("backup-dialog").append(card);
 }
 render();
+
+void refreshFiles()
+  .then(cleanupAttachments)
+  .catch((e) =>
+    attachmentWarning(
+      `File storage is unavailable. Files cannot be added or included in backups. ${e.message}`,
+    ),
+  );
+
+function attachmentWarning(text) {
+  $("attachment-warning").textContent = text;
+  $("attachment-warning").hidden = false;
+}
+function assertFileParent() {
+  if (blockedStorage)
+    throw Error(
+      "Save planner data in browser storage before adding or importing files. Storage is currently unavailable; existing files are left untouched.",
+    );
+  if (localStorage.getItem(STORAGE_KEY) !== lastSaved)
+    throw Error("Plans changed in another tab. Reload before changing files.");
+  if (!filesReady)
+    throw Error("File storage is not ready. Reload or try again.");
+}
+function persistRequired(next) {
+  validate(next);
+  assertFileParent();
+  const raw = JSON.stringify(next);
+  localStorage.setItem(STORAGE_KEY, raw);
+  lastSaved = raw;
+  data = next;
+}
+function announceFileChange() {
+  try {
+    localStorage.setItem("personal-trip-planner.files-revision", uid());
+  } catch {
+    /* Main data is already saved; other tabs can reload file metadata. */
+  }
+}
+async function refreshFiles() {
+  attachmentRows = await files.list();
+  filesReady = true;
+  const keep = new Set(attachmentRows.map((r) => r.id));
+  for (const [id, url] of fileURLs)
+    if (!keep.has(id)) {
+      URL.revokeObjectURL(url);
+      fileURLs.delete(id);
+    }
+  render();
+}
+async function cleanupAttachments() {
+  if (!filesReady || blockedStorage || fileBusy) return;
+  try {
+    const snapshot = lastSaved;
+    if (localStorage.getItem(STORAGE_KEY) !== snapshot) return;
+    const unused = attachmentRows.filter(
+      (r) =>
+        !ownedFiles(data, [r]).length &&
+        (!r.pending || Date.now() - r.createdAt >= 10 * 60 * 1000),
+    );
+    if (!unused.length || localStorage.getItem(STORAGE_KEY) !== snapshot)
+      return;
+    await files.remove(unused.map((r) => r.id));
+    await refreshFiles();
+    announceFileChange();
+  } catch (e) {
+    attachmentWarning(
+      `Unused files could not be removed. Reload to retry cleanup. ${e.message}`,
+    );
+  }
+}
+async function fileMutation(action) {
+  if (fileBusy) throw Error("Wait for the current file operation to finish.");
+  fileBusy++;
+  try {
+    return await action();
+  } finally {
+    fileBusy--;
+    render();
+    void cleanupAttachments();
+  }
+}
+function fileURL(r) {
+  if (!fileURLs.has(r.id)) fileURLs.set(r.id, URL.createObjectURL(r.blob));
+  return fileURLs.get(r.id);
+}
+function downloadFile(r) {
+  const a = el("a");
+  a.href = fileURL(r);
+  a.download = r.name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+function renderAttachments(parent, item, fullDates) {
+  const section = el("div", "attachments"),
+    upload = el("label", "attachment-upload", "＋ Attach PDF / photo"),
+    input = el("input", "sr-only");
+  input.type = "file";
+  input.multiple = true;
+  input.accept = "application/pdf,image/png,image/jpeg,image/webp,image/gif";
+  input.id = `files-${item.id}-${fullDates ? "logistics" : "day"}`;
+  input.setAttribute("aria-label", `Attach PDF or photo to ${item.title}`);
+  input.disabled = blockedStorage || !filesReady || fileBusy > 0;
+  upload.append(input);
+  input.onchange = async () => {
+    if (!input.files.length) return;
+    const chosen = [...input.files],
+      tripId = selected;
+    let added = [],
+      saved = false;
+    try {
+      await fileMutation(async () => {
+        assertFileParent();
+        const rows = await makeRecords(chosen, tripId, item.id);
+        assertFileParent();
+        if (
+          !data.trips.some(
+            (t) => t.id === tripId && t.items.some((i) => i.id === item.id),
+          )
+        )
+          throw Error("The owning plan was removed.");
+        await files.add(rows);
+        added = rows.map((r) => r.id);
+        assertFileParent();
+        if (
+          !data.trips.some(
+            (t) => t.id === tripId && t.items.some((i) => i.id === item.id),
+          )
+        )
+          throw Error("The owning plan was removed.");
+        await files.finalize(added);
+        saved = true;
+        announceFileChange();
+        await refreshFiles();
+        $("attachment-warning").hidden = true;
+        notify("Files saved on this device. Include them in your backup.");
+      });
+    } catch (e) {
+      if (added.length && !saved)
+        try {
+          await files.remove(added);
+          await refreshFiles();
+        } catch {
+          attachmentWarning(
+            "File rollback failed. Reload after ten minutes to retry cleanup.",
+          );
+        }
+      attachmentWarning(
+        saved
+          ? `Files were saved but the view could not refresh. Reload. ${e.message}`
+          : `Files were not saved: ${e.message}`,
+      );
+    } finally {
+      input.value = "";
+    }
+  };
+  section.append(upload);
+  for (const r of attachmentRows.filter(
+    (r) => r.tripId === selected && r.planId === item.id,
+  )) {
+    const row = el("div", "attachment-row");
+    if (r.type.startsWith("image/")) {
+      const img = el("img", "attachment-thumb");
+      img.src = fileURL(r);
+      img.alt = "";
+      img.loading = "lazy";
+      row.append(img);
+    } else row.append(el("span", "attachment-icon", "PDF"));
+    const copy = el("div", "row-copy");
+    append(
+      copy,
+      el("strong", "", r.name),
+      el(
+        "small",
+        "",
+        `${r.type === "application/pdf" ? "PDF" : "Photo"} · ${(r.size / 1024).toFixed(1)} KB · Device only`,
+      ),
+    );
+    const actions = el("div", "attachment-actions");
+    append(
+      actions,
+      button("Preview", () => previewFile(r), "text-button"),
+      button("Download", () => downloadFile(r), "text-button"),
+      button(
+        "Rename",
+        () =>
+          startEditor(
+            "Rename file",
+            () =>
+              field("name", "File name", r.name, {
+                required: true,
+                maxLength: 120,
+                wide: true,
+              }),
+            async (v) =>
+              fileMutation(async () => {
+                assertFileParent();
+                await files.rename(r.id, filename(v.name, r.type));
+                await refreshFiles();
+                announceFileChange();
+              }),
+          ),
+        "text-button",
+      ),
+      button(
+        "Remove",
+        () =>
+          confirm(
+            "Remove this file?",
+            `${r.name} will be removed from this device. Download it or save a backup if you want a copy.`,
+            async () =>
+              fileMutation(async () => {
+                assertFileParent();
+                await files.remove([r.id]);
+                await refreshFiles();
+                announceFileChange();
+              }),
+          ),
+        "text-button danger",
+      ),
+    );
+    append(row, copy, actions);
+    section.append(row);
+  }
+  parent.append(section);
+}
+$("attachment-preview-close").onclick = () => closeDialog("attachment-preview");
+$("attachment-preview").addEventListener("close", () => {
+  previewSequence++;
+  previewRender?.cancel();
+  void previewTask?.destroy().catch(() => {});
+  previewTask = null;
+  previewRender = null;
+  $("attachment-preview-content").replaceChildren();
+});
+async function previewFile(r) {
+  const sequence = ++previewSequence,
+    current = () =>
+      sequence === previewSequence && $("attachment-preview").open;
+  $("attachment-preview-title").textContent = r.name;
+  $("attachment-preview-status").textContent = "Loading local preview…";
+  $("attachment-preview-content").replaceChildren();
+  $("attachment-preview-actions").replaceChildren(
+    button("Download original", () => downloadFile(r), "button primary"),
+  );
+  openDialog("attachment-preview");
+  try {
+    if (r.type !== "application/pdf") {
+      const img = el("img", "file-preview-image");
+      img.alt = r.name;
+      img.src = fileURL(r);
+      $("attachment-preview-content").append(img);
+      $("attachment-preview-status").textContent =
+        "Photo stored on this device.";
+      return;
+    }
+    const pdfjs = await import("./vendor/pdf.mjs");
+    if (!current()) return;
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "./vendor/pdf.worker.mjs",
+      import.meta.url,
+    ).href;
+    const bytes = await r.blob.arrayBuffer();
+    if (!current()) return;
+    const task = pdfjs.getDocument({
+      data: new Uint8Array(bytes),
+      isEvalSupported: false,
+      disableFontFace: true,
+      useSystemFonts: true,
+    });
+    previewTask = task;
+    const doc = await task.promise;
+    if (!current() || previewTask !== task) {
+      await task.destroy();
+      return;
+    }
+    const page = await doc.getPage(1);
+    if (!current()) return;
+    const natural = page.getViewport({ scale: 1 }),
+      viewport = page.getViewport({
+        scale: Math.min(1.5, 1000 / natural.width, 1200 / natural.height),
+      }),
+      canvas = el("canvas", "file-preview-canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", `First page of ${r.name}`);
+    $("attachment-preview-content").append(canvas);
+    previewRender = page.render({
+      canvasContext: canvas.getContext("2d"),
+      viewport,
+    });
+    await previewRender.promise;
+    if (!current()) return;
+    $("attachment-preview-status").textContent =
+      `Page 1 of ${doc.numPages}. Download the original for all pages. Local preview only.`;
+  } catch (e) {
+    if (current())
+      $("attachment-preview-status").textContent =
+        `Preview unavailable. Download the original to view it in your PDF/photo viewer. ${e.name === "PasswordException" ? "This PDF requires a password." : e.message}`;
+  }
+}
+
+$("export-text-only").onclick = () =>
+  download(
+    JSON.stringify(data),
+    "application/json",
+    "personal-trip-planner-text-only-backup.json",
+  );

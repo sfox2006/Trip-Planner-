@@ -24,6 +24,7 @@ const ok = (name) => {
   process.stdout.write(`✓ ${name}\n`);
 };
 const screenshot = async (page, name) => {
+  await page.locator("#notice").waitFor({ state: "hidden" });
   await page.screenshot({
     path: path.join(results, name + ".png"),
     fullPage: name !== "mobile-editor",
@@ -437,7 +438,7 @@ const field = (page, name) => page.locator("#field-" + name);
     await page.locator("#export-backup").click();
     const dl = await backupDownload;
     const backup = await fs.readFile(await dl.path(), "utf8");
-    assert.equal(JSON.parse(backup).trips.length, 1);
+    assert.equal(JSON.parse(backup).planner.trips.length, 1);
     await page.locator("#import-file").setInputFiles({
       name: "fictional-backup.json",
       mimeType: "application/json",
@@ -455,7 +456,7 @@ const field = (page, name) => page.locator("#field-" + name);
     );
     await page.locator("#backup-open").click();
     const unsafe = JSON.parse(backup);
-    unsafe.trips[0].items[0].bookingURL = "javascript:alert(1)";
+    unsafe.planner.trips[0].items[0].bookingURL = "javascript:alert(1)";
     await page.locator("#import-file").setInputFiles({
       name: "unsafe.json",
       mimeType: "application/json",
