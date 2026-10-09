@@ -4,7 +4,7 @@ This is a plan, not a passed-test record. Limit all work to `sfox2006/Trip-Plann
 
 ## 1. Publish account testing with private sync blocked
 
-The parent coordinates public config after checking the approved settings and SQL-policy preconditions. Use exactly these five fields in `cloud-config.js`:
+The parent supplied the existing enabled modern publishable key after checking the approved settings and SQL-policy preconditions. Auth-only config is now wired in source; the schema below shows its fields with the actual public key omitted. Use exactly these five fields in `cloud-config.js`:
 
 ```js
 export const cloudConfig = Object.freeze({

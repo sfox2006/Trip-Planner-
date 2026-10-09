@@ -289,6 +289,14 @@ let browser;
   );
   page.on("pageerror", (e) => report.errors.push(e.message));
   const requests = [];
+  // This suite deliberately exercises the fully disabled release and fictional
+  // cloud protocol, even when the public build is configured for Auth-only.
+  await context.route("**/cloud-config.js", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: 'export const cloudConfig = Object.freeze({authEnabled:false,enabled:false,policiesVerified:false,projectUrl:"",publishableKey:""});',
+    }),
+  );
   context.on("request", (r) => {
     requests.push(r.url());
     if (!r.url().startsWith(origin + "/"))

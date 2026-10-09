@@ -83,8 +83,15 @@ export async function initSyncUI({
           ? signInMessage
           : "Cloud sync is not configured. Plans stay on this device.",
       };
-    $("sync-state").textContent = status.text;
-    $("sync-message").textContent = status.text;
+    const message =
+      configured &&
+      !syncConfigured &&
+      !status.text.includes("awaiting live access tests")
+        ? status.text +
+          " Private sync is awaiting live access tests. Plans stay on this device."
+        : status.text;
+    $("sync-state").textContent = message;
+    $("sync-message").textContent = message;
     $("sync-state").dataset.connected = String(joined);
     document.dispatchEvent(new Event("ptp-sync-state"));
     $("sync-disabled").hidden = configured && syncConfigured;

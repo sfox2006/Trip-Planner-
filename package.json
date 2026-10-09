@@ -16,7 +16,8 @@
     "preview": "python3 -m http.server 8080 --bind 127.0.0.1 --directory _site",
     "test:pwa": "node tests/pwa-browser.cjs",
     "bundle:sync": "node scripts/bundle-sync.js",
-    "test:sync": "node tests/sync-browser.cjs"
+    "test:sync": "node tests/sync-browser.cjs",
+    "test:auth": "node tests/auth-only-browser.cjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

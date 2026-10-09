@@ -1,9 +1,9 @@
-// Release gate: keep disabled until the exact backend policies and byte APIs have
-// passed live ownership tests. Only a publishable key may ever be wired here.
+// Approved Auth-only testing. Data sync remains blocked until live ownership,
+// REST/Storage byte and device tests pass. This is only a public publishable key.
 export const cloudConfig = Object.freeze({
-  authEnabled: false,
+  authEnabled: true,
   enabled: false,
   policiesVerified: false,
-  projectUrl: "",
-  publishableKey: "",
+  projectUrl: "https://psdfjframcinoryyklxf.supabase.co",
+  publishableKey: "sb_publishable_afKvtuTfgkX2D9SO2flf6A_zdkonfbs",
 });
