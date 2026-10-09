@@ -41,19 +41,28 @@ let server, browser, directory;
   directory = await fs.mkdtemp(path.join(os.tmpdir(), "trip-planner-pwa-"));
   const site = path.join(directory, "Trip-Planner-");
   const built = await buildSite(site);
-  assert.deepEqual((await fs.readdir(site)).sort(), [
-    ".nojekyll",
-    "app.js",
-    "assets",
-    "attachments.js",
-    "index.html",
-    "manifest.webmanifest",
-    "model.js",
-    "pwa.js",
-    "styles.css",
-    "sw.js",
-    "vendor",
-  ]);
+  assert.deepEqual(
+    (await fs.readdir(site)).sort(),
+    [
+      ".nojekyll",
+      "app.js",
+      "assets",
+      "attachments.js",
+      "cloud-config.js",
+      "index.html",
+      "manifest.webmanifest",
+      "model.js",
+      "pwa.js",
+      "styles.css",
+      "sync-engine.js",
+      "sync-model.js",
+      "sync-provider.js",
+      "sync-store.js",
+      "sync-ui.js",
+      "sw.js",
+      "vendor",
+    ].sort(),
+  );
   assert.equal(built.files.length, PUBLIC_ASSETS.length + 2);
   assert(
     !built.files.some((x) =>

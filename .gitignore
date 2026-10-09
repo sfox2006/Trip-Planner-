@@ -6,5 +6,6 @@ _site/
 personal-trip-planner-backup*.json
 personal-trip-planner-text-only-backup*.json
 personal-trip-planner-recovery*.json
+personal-trip-planner-sync-recovery*.json
 personal-trip-planner*.ics
 Personal Trip Planner*.pdf

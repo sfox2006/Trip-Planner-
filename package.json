@@ -5,23 +5,28 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check app.js && node --check model.js && node --check attachments.js && node --check pwa.js && node --check sw.js && node --check scripts/build-site.js",
+    "check": "node --check app.js && node --check model.js && node --check attachments.js && node --check pwa.js && node --check sw.js && node --check scripts/build-site.js && node --check sync-model.js && node --check sync-provider.js && node --check sync-store.js && node --check sync-engine.js && node --check sync-ui.js",
     "test:browser": "node tests/browser.cjs",
     "start": "python3 -m http.server 8080 --bind 127.0.0.1",
     "test:a11y": "node tests/accessibility.cjs",
-    "format": "prettier --write app.js model.js attachments.js pwa.js sw.js scripts manifest.webmanifest styles.css index.html tests package.json .github/workflows",
-    "format:check": "prettier --check app.js model.js attachments.js pwa.js sw.js scripts manifest.webmanifest styles.css index.html tests package.json .github/workflows",
+    "format": "prettier --write app.js model.js cloud-config.js sync-*.js attachments.js pwa.js sw.js scripts manifest.webmanifest styles.css index.html tests package.json .github/workflows",
+    "format:check": "prettier --check app.js model.js cloud-config.js sync-*.js attachments.js pwa.js sw.js scripts manifest.webmanifest styles.css index.html tests package.json .github/workflows",
     "test:files": "node tests/attachments-browser.cjs",
     "build": "node scripts/build-site.js",
     "preview": "python3 -m http.server 8080 --bind 127.0.0.1 --directory _site",
-    "test:pwa": "node tests/pwa-browser.cjs"
+    "test:pwa": "node tests/pwa-browser.cjs",
+    "bundle:sync": "node scripts/bundle-sync.js",
+    "test:sync": "node tests/sync-browser.cjs",
+    "test:auth": "node tests/auth-only-browser.cjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
+    "esbuild": "0.28.2",
     "playwright": "1.62.1",
     "prettier": "3.9.9"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.117.3",
     "pdfjs-dist": "6.4.299"
   }
 }

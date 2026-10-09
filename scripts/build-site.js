@@ -3,6 +3,11 @@ import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { cloudConfig } from "../cloud-config.js";
+import {
+  authConfigurationReady,
+  configurationShape,
+} from "../sync-provider.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 export const PUBLIC_ASSETS = [
@@ -12,6 +17,12 @@ export const PUBLIC_ASSETS = [
   "model.js",
   "attachments.js",
   "pwa.js",
+  "cloud-config.js",
+  "sync-model.js",
+  "sync-provider.js",
+  "sync-store.js",
+  "sync-engine.js",
+  "sync-ui.js",
   "manifest.webmanifest",
   "assets/compass.svg",
   "assets/icon-180.png",
@@ -20,8 +31,29 @@ export const PUBLIC_ASSETS = [
   "vendor/pdf.mjs",
   "vendor/pdf.worker.mjs",
   "vendor/pdfjs-LICENSE.txt",
+  "vendor/supabase.mjs",
+  "vendor/supabase-LICENSES.txt",
 ];
+export function cloudCSP(config) {
+  if (!configurationShape(config))
+    throw Error(
+      "Cloud config must contain only the five reviewed fields; never add credentials.",
+    );
+  if (authConfigurationReady(config)) return `connect-src ${config.projectUrl}`;
+  if (
+    config.authEnabled !== false ||
+    config.enabled !== false ||
+    config.policiesVerified !== false ||
+    config.projectUrl ||
+    config.publishableKey
+  )
+    throw Error(
+      "Incomplete/unverified cloud configuration. Keep all fields disabled/empty until approved backend checks pass.",
+    );
+  return "connect-src 'none'";
+}
 export async function buildSite(destination = path.join(root, "_site")) {
+  const connectionPolicy = cloudCSP(cloudConfig);
   const files = [];
   for (const name of PUBLIC_ASSETS) {
     let bytes = await readFile(path.join(root, name));
@@ -29,6 +61,7 @@ export async function buildSite(destination = path.join(root, "_site")) {
       bytes = Buffer.from(
         bytes
           .toString()
+          .replace("connect-src 'none'", connectionPolicy)
           .replace(
             'name="planner-offline-shell" content="development"',
             'name="planner-offline-shell" content="ready"',

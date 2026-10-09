@@ -1,5 +1,11 @@
 # Supabase review validation
 
+## Current deployment status (2026-10-09)
+
+The original review/audit below is preserved as historical evidence. Sam approved the exact migration and confirmed-email setup; the parent applied the migration once as `20261009093623_planner_sync_review` and reports 55 rollback-only hosted SQL-role assertions passing. Do not reapply the SQL. Auth-only frontend deployment is approved with a modern publishable key and both data-sync flags false. Actual JWT/REST/private byte, email callback delivery and phone/computer tests remain pending; no real trip import is authorized before they pass. See [current frontend status](PRIVATE_SYNC.md) and [live checklist](PRIVATE_SYNC_LIVE_CHECKLIST.md).
+
+## Original review record
+
 Validated October9,2026. **No live Supabase writes or byte-API tests were performed.** An authorized parent-agent read-only project/catalog audit is described in the contract; it is not a live integration test. No backend resource was provisioned and no actual user/password/session credential or personal travel data was used.
 
 The exact review migration parsed and committed in PostgreSQL17 (`postgres:17-alpine`, downloaded digest`sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24`) in a disposable Docker container with networking disabled, no exposed ports and no persistent volumes. The local harness implements only minimal Auth subject/confirmation columns and Storage metadata tables. It includes adversarial broad object/bucket policies to check restrictive protections; those adversarial policies are not in the production migration.

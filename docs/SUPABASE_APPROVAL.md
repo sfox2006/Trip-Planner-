@@ -1,5 +1,11 @@
 # Specific approval request: private sync setup
 
+## Current deployment status (2026-10-09)
+
+The original review/audit below is preserved as historical evidence. Sam approved the exact migration and confirmed-email setup; the parent applied the migration once as `20261009093623_planner_sync_review` and reports 55 rollback-only hosted SQL-role assertions passing. Do not reapply the SQL. Auth-only frontend deployment is approved with a modern publishable key and both data-sync flags false. Actual JWT/REST/private byte, email callback delivery and phone/computer tests remain pending; no real trip import is authorized before they pass. See [current frontend status](PRIVATE_SYNC.md) and [live checklist](PRIVATE_SYNC_LIVE_CHECKLIST.md).
+
+## Original review record
+
 This is an approval package, **not authority to execute**. The frontend works locally today. Backend changes below have not been applied; actual phone/computer sync and Auth callback code have not passed live tests.
 
 Approve the reviewed migration `supabase/migrations/202610090001_planner_sync_review.sql` **only in project`psdfjframcinoryyklxf` (`personal-trip-planner`)**, creating:
