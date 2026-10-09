@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#23483d" />
+    <meta
+      name="description"
+      content="A calm, practical home for your travel plans. Your trips stay in this browser."
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; worker-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Personal Trip Planner</title>
+    <link rel="icon" type="image/svg+xml" href="assets/compass.svg" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to trip plan</a>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Personal Trip Planner home"
+        ><span class="brand-mark" aria-hidden="true">✧</span
+        ><span
+          ><span class="eyebrow">GOOD PLANS. GREAT JOURNEYS.</span
+          ><span class="wordmark">Personal Trip Planner</span></span
+        ></a
+      >
+      <div class="top-actions">
+        <span class="local-badge"
+          ><span class="dot"></span> Stored on this device</span
+        ><button id="backup-open" class="button quiet">
+          Backup &amp; privacy
+        </button>
+      </div>
+    </header>
+    <div id="storage-warning" class="storage-warning" role="alert" hidden></div>
+    <div
+      id="attachment-warning"
+      class="storage-warning"
+      role="alert"
+      hidden
+    ></div>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Your trips">
+        <div class="sidebar-title">
+          <h2>Your trips</h2>
+          <span id="trip-count" class="counter">0</span>
+        </div>
+        <div class="trip-list-controls" aria-label="Filter your trip list">
+          <label class="trip-search"
+            ><span class="sr-only">Search trips</span
+            ><input
+              id="trip-search"
+              type="search"
+              placeholder="Search your trips"
+              aria-label="Search trips"
+          /></label>
+          <label class="trip-status"
+            ><span class="sr-only">Trip date filter</span
+            ><select id="trip-date-filter" aria-label="Trip date filter">
+              <option value="all">All trips</option>
+              <option value="upcoming">Upcoming &amp; current</option>
+              <option value="past">Past trips</option>
+            </select></label
+          >
+        </div>
+        <div id="trip-list"></div>
+        <button id="new-trip" class="button new-trip">＋ Create a trip</button>
+        <div class="sidebar-note">
+          <span class="eyebrow">A LITTLE PEACE OF MIND</span>
+          <p>
+            Your plans stay in this browser. Save a backup before changing
+            devices.
+          </p>
+          <button id="sidebar-backup" class="text-button">
+            Save a backup ↗
+          </button>
+        </div>
+      </aside>
+      <main id="main" tabindex="-1">
+        <div id="welcome" class="welcome" hidden>
+          <span class="eyebrow">ROOM FOR YOUR NEXT ADVENTURE</span>
+          <h1>Every good trip<br />starts with a little plan.</h1>
+          <p>
+            Gather your days, bookings and the small details in one calm place.
+          </p>
+          <div class="actions">
+            <button id="welcome-create" class="button primary">
+              ＋ Create your first trip</button
+            ><button id="load-demo" class="button">
+              Explore a fictional example
+            </button>
+          </div>
+          <div class="welcome-features">
+            <span>◇ Day-by-day plans</span><span>✓ Packing &amp; expenses</span
+            ><span>↗ Local backups</span>
+          </div>
+          <p class="privacy-note">
+            Same browser, same device. No account, analytics or automatic sync.
+          </p>
+        </div>
+        <div id="trip-view" hidden>
+          <section class="trip-hero" aria-labelledby="trip-heading">
+            <div class="hero-copy">
+              <span class="eyebrow">YOUR NEXT CHAPTER</span>
+              <h1 id="trip-heading"></h1>
+              <p id="trip-meta"></p>
+              <p id="trip-notes" class="hero-notes"></p>
+              <div class="hero-actions">
+                <button id="edit-trip" class="button light">Edit trip</button
+                ><button id="print-trip" class="button light">
+                  Print itinerary</button
+                ><button id="calendar-export" class="button light">
+                  Export calendar
+                </button>
+              </div>
+            </div>
+            <div class="hero-art" aria-hidden="true">
+              <svg viewBox="0 0 200 160">
+                <circle cx="130" cy="55" r="30" />
+                <path
+                  d="M0 133 Q50 67 105 114 T210 95 M0 150 Q70 90 130 138 T210 120"
+                />
+                <path
+                  d="M50 112 L80 20 L96 93 L50 112 M80 20 L158 102 L96 93"
+                />
+                <path d="M96 93 L105 114" /></svg
+              ><span>Make room for<br />the memorable.</span>
+            </div>
+          </section>
+          <div class="trip-summary" id="trip-summary"></div>
+          <nav id="section-nav" class="section-nav" aria-label="Trip sections">
+            <button data-section="itinerary" aria-current="page">
+              Itinerary</button
+            ><button data-section="logistics">Stays &amp; travel</button
+            ><button data-section="packing">Packing</button
+            ><button data-section="budget">Costs</button
+            ><button data-section="links">Useful links</button>
+          </nav>
+          <div id="planning-alerts"></div>
+          <section id="itinerary-panel" aria-label="Day-by-day itinerary">
+            <div class="date-navigation">
+              <button
+                id="prev-day"
+                class="icon-button"
+                aria-label="Previous day"
+              >
+                ‹
+              </button>
+              <div
+                id="date-tabs"
+                class="date-tabs"
+                role="tablist"
+                aria-label="Trip dates"
+              ></div>
+              <button id="next-day" class="icon-button" aria-label="Next day">
+                ›</button
+              ><label class="jump-date"
+                ><span class="sr-only">Jump to date</span
+                ><input id="jump-date" type="date" aria-label="Jump to date"
+              /></label>
+            </div>
+            <div class="filter-row">
+              <label class="search"
+                ><span aria-hidden="true">⌕</span
+                ><input
+                  id="search"
+                  type="search"
+                  placeholder="Search plans, places or notes"
+                  aria-label="Search itinerary" /></label
+              ><label
+                ><span class="sr-only">Booking status</span
+                ><select id="status-filter" aria-label="Booking status">
+                  <option value="all">All statuses</option>
+                  <option value="booked">Booked</option>
+                  <option value="suggested">Suggested</option>
+                </select></label
+              ><label
+                ><span class="sr-only">Item type</span
+                ><select id="kind-filter" aria-label="Item type">
+                  <option value="all">All types</option>
+                  <option value="activity">Activities</option>
+                  <option value="accommodation">Accommodation</option>
+                  <option value="transport">Transport</option>
+                </select></label
+              >
+            </div>
+            <div class="section-heading">
+              <div>
+                <span id="day-number" class="eyebrow"></span>
+                <h2 id="day-heading" tabindex="-1"></h2>
+                <p id="day-description" class="muted"></p>
+              </div>
+              <button id="add-activity" class="button primary">
+                ＋ Add a plan
+              </button>
+            </div>
+            <div id="day-items" role="tabpanel"></div>
+          </section>
+          <section id="logistics-panel" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">THE PRACTICAL DETAILS</span>
+                <h2>Stays &amp; travel</h2>
+                <p class="muted">A place to land. A way to get there.</p>
+              </div>
+              <button id="add-logistics" class="button primary">
+                ＋ Add stay or travel
+              </button>
+            </div>
+            <div id="logistics-items"></div>
+          </section>
+          <section id="packing-panel" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">LEAVE NOTHING BEHIND</span>
+                <h2>Your packing list</h2>
+                <p id="packing-progress" class="muted"></p>
+              </div>
+              <button id="add-packing" class="button primary">
+                ＋ Add item
+              </button>
+            </div>
+            <div id="packing-items" class="list-card"></div>
+          </section>
+          <section id="budget-panel" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">A LITTLE FINANCIAL CLARITY</span>
+                <h2>Trip costs &amp; budget</h2>
+                <p class="muted">
+                  Itemize what everything costs. Track paid and planned amounts
+                  in each currency. No conversions.
+                </p>
+              </div>
+              <div class="actions">
+                <button id="add-budget" class="button">Set a budget</button
+                ><button id="add-expense" class="button primary">
+                  ＋ Add cost
+                </button>
+              </div>
+            </div>
+            <div id="budget-totals" class="budget-totals"></div>
+            <h3>Budget limits</h3>
+            <div id="budget-items" class="list-card"></div>
+            <h3>Itemized costs</h3>
+            <div id="expense-items" class="list-card"></div>
+          </section>
+          <section id="links-panel" hidden>
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">HANDY WHEN YOU NEED THEM</span>
+                <h2>Useful links</h2>
+                <p class="muted">
+                  Maps, opening hours and anything worth keeping close.
+                </p>
+              </div>
+              <button id="add-link" class="button primary">＋ Add link</button>
+            </div>
+            <div id="link-items" class="list-card"></div>
+          </section>
+          <div class="trip-bottom">
+            <span class="muted">Changes are saved in this browser.</span
+            ><button id="delete-trip" class="text-button danger">
+              Delete this trip
+            </button>
+          </div>
+        </div>
+        <footer>
+          <span>Personal Trip Planner</span
+          ><span>Less juggling. More exploring.</span>
+        </footer>
+      </main>
+    </div>
+    <dialog id="editor" aria-labelledby="editor-title">
+      <form id="editor-form">
+        <div class="dialog-heading">
+          <div>
+            <span class="eyebrow">MAKE IT YOURS</span>
+            <h2 id="editor-title"></h2>
+          </div>
+          <button
+            type="button"
+            id="editor-close"
+            class="icon-button"
+            aria-label="Close editor"
+          >
+            ×
+          </button>
+        </div>
+        <div id="editor-fields" class="form-grid"></div>
+        <p id="editor-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button type="button" id="editor-cancel" class="button">Cancel</button
+          ><button type="submit" class="button primary">Save changes</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="backup-dialog" aria-labelledby="backup-title">
+      <div class="dialog-heading">
+        <h2 id="backup-title">Your plans, on your terms.</h2>
+        <button
+          id="backup-close"
+          class="icon-button"
+          aria-label="Close backup and privacy"
+        >
+          ×
+        </button>
+      </div>
+      <p>
+        Trips are saved in <strong>this browser on this device</strong>. There
+        is no account, cloud storage or automatic sync. Other people using this
+        browser can see your plans.
+      </p>
+      <p>
+        Clearing browser data, private browsing, or switching browsers can
+        remove or hide your trips. Download a backup regularly. Backups,
+        calendar files and prints can contain personal details: keep them
+        somewhere safe.
+      </p>
+      <p>
+        Browser storage belongs to the website origin, not its URL path. Other
+        sites on the same hostname can access it. The public app does not
+        publish your entered trips or files, but storage is not encrypted.
+      </p>
+      <div class="backup-card">
+        <h3>Save a local copy</h3>
+        <p>
+          Download all trips and their PDF/photo attachments in one JSON file.
+          Nothing is uploaded.
+        </p>
+        <button id="export-backup" class="button primary">
+          Download backup
+        </button>
+      </div>
+      <button id="export-text-only" class="text-button">
+        Download trip text only (no files)
+      </button>
+      <div class="backup-card">
+        <h3>Bring your plans back</h3>
+        <p>
+          Import a planner backup (up to 32 MB including files; planner text up
+          to 2 MB). Review it first; existing trips stay intact. Imported trips
+          are added as separate copies.
+        </p>
+        <label class="file-label"
+          >Choose backup file<input
+            id="import-file"
+            type="file"
+            accept=".json,application/json"
+        /></label>
+        <p id="import-error" class="form-error" role="alert" hidden></p>
+        <div id="import-preview" hidden></div>
+        <button id="confirm-import" class="button primary" hidden>
+          Add imported trips
+        </button>
+      </div>
+      <p class="muted">
+        No analytics or personal-data uploads. Links open only when you choose
+        them; the linked website has its own privacy policy. Booking and ticket
+        links may grant access to reservations—treat them as sensitive. This app
+        does not make bookings.
+      </p>
+    </dialog>
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+      <h2 id="confirm-title">Delete this item?</h2>
+      <p id="confirm-description"></p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" class="button">Keep it</button
+        ><button id="confirm-delete" class="button destructive">Delete</button>
+      </div>
+    </dialog>
+    <dialog id="attachment-preview" aria-labelledby="attachment-preview-title">
+      <div class="dialog-heading">
+        <h2 id="attachment-preview-title"></h2>
+        <button
+          id="attachment-preview-close"
+          class="icon-button"
+          aria-label="Close file preview"
+        >
+          ×
+        </button>
+      </div>
+      <p id="attachment-preview-status" role="status"></p>
+      <div id="attachment-preview-content"></div>
+      <p class="muted">
+        PDF preview shows the first page. PDF scripts, links and embedded
+        actions are not executed. Download to view all pages.
+      </p>
+      <div id="attachment-preview-actions" class="dialog-actions"></div>
+    </dialog>
+    <div
+      id="notice"
+      role="status"
+      aria-live="polite"
+      class="notice"
+      hidden
+    ></div>
+    <div id="print-view"></div>
+    <noscript
+      ><p class="storage-warning">
+        Enable JavaScript to use the planner. No trip data is transmitted.
+      </p></noscript
+    >
+  </body>
+</html>

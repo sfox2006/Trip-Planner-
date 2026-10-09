@@ -1,0 +1,22 @@
+# First-version validation
+
+Validated on October 9, 2026 in Node 24.19.0 and system Chromium 151.0.7922.173. All examples and generated artifacts are fictional.
+
+- `npm run format:check`: passed source formatting checks.
+- `npm audit --audit-level=high`: no vulnerabilities reported in the pinned dependency/toolchain tree.
+- `npm run check`: passed JavaScript syntax checks.
+- `npm test`: 21 unit tests passed, including binary backup integrity, safe filenames and type/size/import validation.
+- `npm run test:browser`: 35 browser scenario checks passed, covering real desktop/mobile CRUD, persistence/reload, filter preservation through edits/date changes, keyboard date navigation, safe import/export, ICS, printing, empty states, conflicts, unavailable/corrupt storage and stale-tab protection. The expanded trip-selector checks cover upcoming/past/all/search filters and no-match states on desktop/mobile; switching restores each trip’s own date, section and filters. Costs checks cover paid/planned amounts, zero/decimal values, per-trip/currency isolation, linked costs and deletion without loss or double counting.
+- `npm run test:a11y`: no axe WCAG A/AA violations across nine desktop/mobile/empty/section/dialog states; keyboard focus remains inside the editor dialog.
+- `npm run test:files`: 16 browser checks passed: PDF/photo upload/reload, local previews, sanitized rename, byte-exact original download and full backup/import, trip/plan ownership and deletion isolation, accommodation/place attachment controls, quota failure preservation, durable-import refresh failure recovery and pending-import cleanup protection. PDF preview and attachment controls also passed axe WCAG A/AA audits; no external file/PDF requests or browser errors occurred.
+- `git diff --check`: passed.
+
+Visual verification included 1440px desktop, 390px phone and 320px narrow phone layouts. The empty state, populated itinerary, mobile editor, packing, costs, multiple-trip selectors, trip-filter empty states, attachment cards, local PDF preview and full printed itinerary were captured and inspected. Generated screenshots/PDF/reports live in ignored `test-results/`, and can be reproduced with the browser suites. Automated Chromium checks do not replace testing on actual iOS/Android devices or with every screen reader.
+
+A separate read-only agent reviewed correctness, imports, privacy, timezone behavior, calendar escaping and accessibility. Its reported core blockers were fixed and rechecked: repeated conflict time conversion, backup/reload size consistency, pretty-export size mismatch, standalone calendar carriage returns, date-line travel, date-tab focus and independent arrival/departure reminders. It also reviewed attachment security and concurrent operations. Its reproduced post-commit import-refresh failure now preserves durable planner data and binary files; pending staging and stored-snapshot guards protect imports from stale cleanup. Preview/editor generation guards, export snapshot checks and error handling were rechecked. Trip-state/cost isolation and trip-selection keyboard focus were checked in a real browser. Final independent attachment re-review found no remaining material blocker and independently passed all 21 unit tests and syntax checks.
+
+The reference repository was read without modification, including current GitHub `main` source (`styles.css` blob `d5628cf7a1f4f334c8f1f2647f386a146efa492c`, `app.js` blob `8e544511e9e62558cf31e4fc47ccc59ef8c2013a`). No applicable target/root AGENTS.md or local skills were present. Trip-Planner- was cloned through authorized access; its initial content was one README heading. GitHub metadata confirmed public visibility and authorized push access.
+
+No personal trip data, live accommodation addresses, email links, booking references, QR codes or access credentials were used. Test photos are generated solid colors and the test PDF contains a fictional rectangle. The application made no external requests in the instrumented browser scenarios. Source uses no remote assets, analytics or personal-data APIs. Storage is same-browser/same-device localStorage plus IndexedDB for file blobs, with local binary-inclusive download exports; it is neither encrypted storage nor cloud sync.
+
+Only a feature branch and draft PR are authorized. Merge and deployment remain subject to Sam's explicit approval. The test workflow has no deployment steps. Local checks were run before submission; remote workflow status is reported separately when available.
