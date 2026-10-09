@@ -7,6 +7,10 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#23483d" />
+    <meta name="planner-offline-shell" content="development" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Trip Planner" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
       content="A calm, practical home for your travel plans. Your trips stay in this browser."
@@ -18,8 +22,11 @@
     />
     <title>Personal Trip Planner</title>
     <link rel="icon" type="image/svg+xml" href="assets/compass.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/icon-180.png" />
     <link rel="stylesheet" href="styles.css" />
     <script type="module" src="app.js"></script>
+    <script type="module" src="pwa.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to trip plan</a>
@@ -272,12 +279,61 @@
             </button>
           </div>
         </div>
+        <div class="install-bar">
+          <p id="pwa-state" class="muted" role="status"></p>
+          <button id="install-open" class="button quiet">
+            Add to home screen
+          </button>
+        </div>
         <footer>
           <span>Personal Trip Planner</span
           ><span>Less juggling. More exploring.</span>
         </footer>
       </main>
     </div>
+    <dialog id="install-dialog" aria-labelledby="install-title">
+      <div class="dialog-heading">
+        <h2 id="install-title">Your planner, one tap away.</h2>
+        <button
+          id="install-close"
+          class="icon-button"
+          aria-label="Close installation instructions"
+        >
+          ×
+        </button>
+      </div>
+      <p>
+        Open the planner from your home screen, without the usual browser tabs.
+      </p>
+      <button id="install-native" class="button primary" hidden>
+        Install app
+      </button>
+      <p id="install-message" role="status"></p>
+      <h3>iPhone or iPad</h3>
+      <p>
+        Open this site in Safari. Tap Share, then Add to Home Screen, then Add.
+        You may need to scroll the Share menu to find it.
+      </p>
+      <h3>Android</h3>
+      <p>
+        Open this site in Chrome. Use Install app above when offered, or open
+        the ⋮ menu and choose Install app or Add to Home screen. The wording
+        depends on your browser.
+      </p>
+      <h3>Keep your plans safe</h3>
+      <p>
+        Download a complete backup before installing. On iOS, Safari and the
+        home-screen app may use separate storage. If the new app starts empty,
+        use Backup &amp; privacy to import your file. Installation does not
+        synchronize devices.
+      </p>
+      <p>
+        Wait until Offline copy ready appears before relying on offline access.
+        Save any open edits first. After an update, close all planner tabs and
+        home-screen windows, then reopen. Saved plans and files stay in browser
+        storage; clearing website data can erase them.
+      </p>
+    </dialog>
     <dialog id="editor" aria-labelledby="editor-title">
       <form id="editor-form">
         <div class="dialog-heading">

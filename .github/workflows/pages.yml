@@ -24,13 +24,9 @@ jobs:
       - run: npm run format:check && npm run check && npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser && npm run test:files && npm run test:a11y
+      - run: npm run test:pwa
       - name: Prepare only reviewed static assets
-        run: |
-          mkdir -p _site/assets _site/vendor
-          cp index.html styles.css app.js model.js attachments.js _site/
-          cp assets/compass.svg _site/assets/
-          cp vendor/pdf.mjs vendor/pdf.worker.mjs vendor/pdfjs-LICENSE.txt _site/vendor/
-          touch _site/.nojekyll
+        run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

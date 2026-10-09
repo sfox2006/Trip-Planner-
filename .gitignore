@@ -1,5 +1,6 @@
 node_modules/
 test-results/
+_site/
 *.private.json
 .DS_Store
 personal-trip-planner-backup*.json

@@ -781,6 +781,36 @@ footer span:first-child {
     13px Georgia,
     serif;
 }
+.install-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  padding-top: 18px;
+}
+.install-bar p {
+  font-size: 12px;
+  line-height: 1.6;
+  max-width: 580px;
+  margin: 0;
+}
+.install-bar button {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .install-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+@media print {
+  .install-bar {
+    display: none !important;
+  }
+}
 .welcome {
   padding: 80px 20px;
   text-align: center;
