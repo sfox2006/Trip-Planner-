@@ -27,9 +27,17 @@ const ok = (name) => {
   report.checks.push(name);
   console.log("✓ " + name);
 };
-async function mockUI(page, { cloud = null, signedIn = false } = {}) {
+async function mockUI(
+  page,
+  {
+    cloud = null,
+    signedIn = false,
+    syncConfigured = true,
+    callbackRecovery = false,
+  } = {},
+) {
   await page.evaluate(
-    async ({ cloud, signedIn }) => {
+    async ({ cloud, signedIn, syncConfigured, callbackRecovery }) => {
       const { initSyncUI } = await import("./sync-ui.js"),
         { emptyDocument, clone, checkDocument, sha256 } =
           await import("./sync-model.js"),
@@ -84,7 +92,13 @@ async function mockUI(page, { cloud = null, signedIn = false } = {}) {
           state.calls.push("recover");
         },
         async updatePassword() {
+          state.calls.push("updatePassword");
           return this.user();
+        },
+        async callback() {
+          state.calls.push("callback");
+          state.signedIn = true;
+          return { recovery: callbackRecovery, user: await this.user() };
         },
         async signOut() {
           state.signedIn = false;
@@ -183,6 +197,7 @@ async function mockUI(page, { cloud = null, signedIn = false } = {}) {
       }
       const ui = await initSyncUI({
         configured: true,
+        syncConfigured,
         providerFactory: async (options) => {
           state.rememberOptions.push(options);
           return provider;
@@ -214,7 +229,7 @@ async function mockUI(page, { cloud = null, signedIn = false } = {}) {
         },
       };
     },
-    { cloud, signedIn },
+    { cloud, signedIn, syncConfigured, callbackRecovery },
   );
 }
 async function seed(page) {
@@ -308,7 +323,70 @@ let browser;
     "Disabled build makes no Auth/SDK calls, strips callback tokens, and has accessible keyboard/phone setup state",
   );
   await seed(page);
+  const originalPlanner = await page.evaluate(() =>
+    localStorage.getItem("personal-trip-planner.v1"),
+  );
+  await mockUI(page, { syncConfigured: false });
+  await page.locator("#sync-open").click();
+  await page.locator("#sync-email").fill("fictional-owner@example.test");
+  await page.locator("#sync-password").fill("Fictional test password");
+  await page.locator("#sync-auth button[value=signin]").click();
+  await page.locator("#sync-account").waitFor({ state: "visible" });
+  assert(await page.locator("#sync-join").isHidden());
+  assert(await page.locator("#sync-connected").isHidden());
+  assert.match(
+    await page.locator("#sync-message").innerText(),
+    /awaiting live access tests/,
+  );
+  await axe(page, "Auth-only signed-in gate");
+  await page.evaluate(() => document.getElementById("sync-connect").click());
+  await page.waitForFunction(
+    () => document.getElementById("sync-close").disabled === false,
+  );
+  assert.deepEqual(await page.evaluate(() => fictionalSync.state.calls), []);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  assert.deepEqual(await page.evaluate(() => fictionalSync.state.calls), []);
+  assert.equal(await page.evaluate(() => fictionalSync.ui.engine.owner), null);
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("personal-trip-planner.v1")),
+    originalPlanner,
+  );
+  await page.locator("#sync-signout").click();
+  await page.locator("#sync-auth").waitFor({ state: "visible" });
+  await page.evaluate(() => fictionalSync.ui.dispose());
+  await page.reload();
+  await page.locator("#trip-view").waitFor({ state: "visible" });
+  ok(
+    "Auth-only sign-in/signout hides and refuses cloud connect, preserves local plans, and never reads or writes cloud data on reconnection",
+  );
+  await page.evaluate(() =>
+    history.replaceState(null, "", "?code=fictional-recovery-code"),
+  );
+  await mockUI(page, { syncConfigured: false, callbackRecovery: true });
+  await page.locator("#sync-open").click();
+  await page.locator("#sync-new-password").waitFor({ state: "visible" });
+  await axe(page, "Auth-only password recovery");
+  await page
+    .locator("#sync-new-password-value")
+    .fill("Fictional replacement password");
+  await page.locator("#sync-new-password button").click();
+  await page.locator("#sync-new-password").waitFor({ state: "hidden" });
+  assert.equal(await page.locator("#sync-new-password-value").inputValue(), "");
+  assert.deepEqual(await page.evaluate(() => fictionalSync.state.calls), [
+    "callback",
+    "updatePassword",
+  ]);
+  assert.equal(await page.evaluate(() => fictionalSync.ui.engine.owner), null);
+  assert.equal(await page.evaluate(() => location.search), "");
+  assert(await page.locator("#sync-join").isHidden());
+  await page.evaluate(() => fictionalSync.ui.dispose());
+  await page.reload();
+  await page.locator("#trip-view").waitFor({ state: "visible" });
+  ok(
+    "Auth-only fictional recovery callback clears URL/password, permits replacement, and never attaches or previews cloud data",
+  );
   await mockUI(page);
+
   await page.locator("#sync-open").click();
   await axe(page, "mobile sign-in");
   await screenshot(page, "sync-signin-mobile");

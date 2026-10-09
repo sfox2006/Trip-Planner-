@@ -1,6 +1,6 @@
-# Private sync frontend — disabled draft
+# Private sync frontend and staged Auth testing
 
-This branch implements the frontend; **it does not enable cloud sync**. `cloud-config.js` contains `enabled: false`, `policiesVerified: false`, an empty project URL and an empty publishable key. Default CSP is `connect-src 'none'`. Opening the private-sync dialog shows a setup state; there is no Auth client, account creation, telemetry or transmission of trips/files. The local planner remains usable.
+This branch implements the frontend; **it does not enable cloud sync**. `cloud-config.js` contains `authEnabled: false`, `enabled: false`, `policiesVerified: false`, an empty project URL and an empty publishable key. Default CSP is `connect-src 'none'`. Opening the private-sync dialog shows a setup state; there is no Auth client, account creation, telemetry or transmission of trips/files. The local planner remains usable.
 
 The backend proposal is a separate, unmerged [review-only PR #3](https://github.com/sfox2006/Trip-Planner-/pull/3), reviewed at `fb0e2a534b23df5c873caed9887c7984046a0456`. This frontend implements its five `planner_api` RPCs and private `planner-attachments` bucket contract. No SQL, bucket/policy changes, dashboard changes or credentials are included here.
 
@@ -24,18 +24,26 @@ Cloud records/files would be plaintext protected by verified Auth/RLS and privat
 
 ## Required separate approval and live release gate
 
-Do not retrieve/wire keys, enable this build, create test users or apply SQL based on this frontend PR. First receive Sam's specific backend approval relayed by the parent:
+This frontend alone does not authorize backend changes or account creation. Sam's approval and hosted migration/policy verification have now been relayed in the 2026-10-09 handoff. Do not reapply the migration. The remaining live release requirements are:
 
-1. Apply only the exact reviewed migration to project `psdfjframcinoryyklxf`; create its private bucket and reviewed policies/RPCs.
+1. Preserve the applied exact reviewed migration on project `psdfjframcinoryyklxf` (hosted history `20261009093623_planner_sync_review`). Hosted rollback-only SQL-role assertions are preconditions, not actual JWT/REST/Storage tests.
 2. Expose only `planner_api`; keep `planner_private` unexposed and default public-table auto-exposure off. Verify actual grants, forced RLS, public-link absence, bucket settings and unrelated-bucket nonregression.
 3. Enable individual email/password with confirmation required, anonymous Auth disabled, and the exact `https://sfox2006.github.io/Trip-Planner-/` redirect. No approval for SMTP provisioning, paid services, organization membership changes or existing-trigger cleanup is implied.
 4. With user-controlled eligible addresses, test two distinct confirmed accounts plus unconfirmed and unauthenticated negative cases. Users enter passwords privately. Default Supabase SMTP restricts delivery to organization team addresses, currently at a low best-effort rate; eligibility/delivery and dashboard Auth settings remain unverified. If unavailable, retain confirmation and report the specific blocker.
 5. Validate real Storage APIs with an obviously fictional small file: immutable upload/download/hash, MIME/size/quota reservations, owner B/anonymous denial, direct-table denial, CAS conflicts/tombstones, delete-while-reference and reference-while-delete races, missing-byte recovery and unrelated buckets. The local PostgreSQL harness does not prove deployed APIs/settings.
 
-Only after recording those results may a separate wiring change set both release flags and a publishable key. Never use service-role/secret/JWT keys. The build rejects partial/unverified configuration and injects a CSP allowing only the exact reviewed backend origin. Check actual browser PKCE confirmation/recovery and two-device sync before treating sync as available. Actual iOS/Android installation/storage and mail delivery require physical/user-controlled testing. The proposed backend currently has no automatic tombstone/abandoned-reservation expiry and no account-erasure UI.
+Only after recording those results may a separate wiring change set `enabled: true` and `policiesVerified: true`. `authEnabled` is an independent account-testing gate, described below; it does not authorize planner or Storage access. Never use service-role/secret/JWT keys. The build rejects partial/unverified configuration and injects a CSP allowing only the exact reviewed backend origin. Check actual browser PKCE confirmation/recovery and two-device sync before treating sync as available. Actual iOS/Android installation/storage and mail delivery require physical/user-controlled testing. The proposed backend currently has no automatic tombstone/abandoned-reservation expiry and no account-erasure UI.
 
 ## Validation
 
 `npm test` includes pure merge/engine tests and the **real pinned SDK against mocked fetch**, including account-switch and delayed-Auth/signout regressions. `npm run test:sync` exercises actual browser forms, the real planner bridge and IndexedDB, v1→v2 attachment preservation, offline reload, owner binding, conflict-copy selection, local recovery exports, reset/loss guards, keyboard focus and WCAG A/AA states. It uses fictional in-memory Auth/cloud; it does **not** verify real Supabase, email delivery or physical phones. Existing CRUD, file, PWA and accessibility suites remain required. Screenshots/reports are fictional and ignored under `test-results/`.
 
 The SDK is pinned to `@supabase/supabase-js` 2.117.3 and bundled locally with esbuild 0.28.2. `npm run bundle:sync` reproduces the checked-in ESM and every bundled dependency license; CI checks for a clean diff. No runtime CDN is used.
+
+## Auth-only test deployment
+
+The default source config remains fully disabled with empty URL/key. After the parent verifies the approved Auth settings and hosted policy preconditions, a separate public-config commit may use `authEnabled: true`, `enabled: false`, `policiesVerified: false`, the exact project URL, and an enabled `sb_publishable_...` key. This permits confirmed email/password account testing, PKCE callbacks, password recovery and sign-out. It does not require exposing `planner_api` just to test Auth.
+
+In this mode the UI never attaches an owner journal, reads a cloud preview or polls sync. Connect/file controls are hidden and their action handlers refuse execution. The provider snapshots the release configuration and refuses all RPC/Storage methods before verifying a data request; guarded fetch additionally blocks non-Auth endpoints. Only Auth HTTP requests can leave the app. The build allows the exact backend origin for Auth and rejects mismatched flags, URL, extra fields and secret/JWT keys. CSP grants an origin, not server authorization; live backend policies remain essential.
+
+Keep private sync flags false until the full two-account negative/API/file test record passes. An Auth-only deployment can safely contain existing local trips without sending them, but use an isolated browser profile with fictional fixtures for integration testing. Do not place passwords, JWTs, refresh tokens, confirmation links, screenshots with identities, or real trip data in this public repository. See [the staged live checklist](PRIVATE_SYNC_LIVE_CHECKLIST.md).

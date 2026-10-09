@@ -4,7 +4,10 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { cloudConfig } from "../cloud-config.js";
-import { configurationReady, configurationShape } from "../sync-provider.js";
+import {
+  authConfigurationReady,
+  configurationShape,
+} from "../sync-provider.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 export const PUBLIC_ASSETS = [
@@ -34,10 +37,11 @@ export const PUBLIC_ASSETS = [
 export function cloudCSP(config) {
   if (!configurationShape(config))
     throw Error(
-      "Cloud config must contain only the four reviewed fields; never add credentials.",
+      "Cloud config must contain only the five reviewed fields; never add credentials.",
     );
-  if (configurationReady(config)) return `connect-src ${config.projectUrl}`;
+  if (authConfigurationReady(config)) return `connect-src ${config.projectUrl}`;
   if (
+    config.authEnabled !== false ||
     config.enabled !== false ||
     config.policiesVerified !== false ||
     config.projectUrl ||

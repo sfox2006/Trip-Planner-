@@ -1,5 +1,6 @@
 import { cloudConfig } from "./cloud-config.js";
 import {
+  authConfigurationReady,
   configurationReady,
   createProvider,
   takeAuthCallback,
@@ -28,7 +29,8 @@ function localDownload(text) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export async function initSyncUI({
-  configured = configurationReady(cloudConfig),
+  configured = authConfigurationReady(cloudConfig),
+  syncConfigured = configurationReady(cloudConfig),
   providerFactory = (options) => createProvider(cloudConfig, options),
   store = syncStore,
   bridge = plannerBridge,
@@ -53,12 +55,23 @@ export async function initSyncUI({
     remember = localStorage.getItem(rememberKey) === "true";
   } catch {}
   $("sync-remember").checked = remember;
-  if (configured) {
+  if (configured && syncConfigured) {
     if ($("welcome-privacy"))
       $("welcome-privacy").textContent =
         "Save trips on this device, or confirm an individual account and explicitly connect private sync.";
     $("backup-storage-model").textContent =
       "Trips save in this browser on this device. Nothing is uploaded until you confirm an individual account and connect this device to private sync. Connected copies sync when online; check save status. Provider administrators can access cloud data; it is not end-to-end encrypted. This browser’s storage is also unencrypted and other people using it can see your plans.";
+  }
+  const signInMessage = syncConfigured
+    ? "Sign in with your confirmed individual account to connect private sync."
+    : "Sign in with your confirmed individual account. Private sync is awaiting live access tests; plans stay on this device.";
+  if (configured && !syncConfigured) {
+    $("welcome-privacy").textContent =
+      "Save trips on this device. Account sign-in is available for testing; private sync is awaiting live access tests.";
+    $("backup-storage-model").textContent =
+      "Trips and files save in this browser on this device. Account sign-in is available for testing; private sync remains blocked and no trip data is uploaded. Other people using this browser can see your plans.";
+    $("sync-disabled").textContent =
+      "Account sign-in is available. Private sync is awaiting live access tests; no trips or files are sent.";
   }
   function render() {
     const state = engine?.state,
@@ -67,21 +80,21 @@ export async function initSyncUI({
       ),
       status = engine?.status || {
         text: configured
-          ? "Sign in with your confirmed individual account to connect private sync."
+          ? signInMessage
           : "Cloud sync is not configured. Plans stay on this device.",
       };
     $("sync-state").textContent = status.text;
     $("sync-message").textContent = status.text;
     $("sync-state").dataset.connected = String(joined);
     document.dispatchEvent(new Event("ptp-sync-state"));
-    $("sync-disabled").hidden = configured;
+    $("sync-disabled").hidden = configured && syncConfigured;
     $("sync-auth").hidden = !configured || Boolean(currentUser);
     $("sync-account").hidden = !currentUser;
     $("sync-identity").textContent = currentUser
       ? "Signed in as " + currentUser.email
       : "";
-    $("sync-join").hidden = joined || recoveryMode;
-    $("sync-connected").hidden = !joined || recoveryMode;
+    $("sync-join").hidden = !syncConfigured || joined || recoveryMode;
+    $("sync-connected").hidden = !syncConfigured || !joined || recoveryMode;
     $("sync-new-password").hidden = !recoveryMode;
     $("sync-repair").hidden = status.kind !== "file-recovery";
     $("sync-recovery").hidden =
@@ -165,6 +178,14 @@ export async function initSyncUI({
       render();
     }
   }
+  const syncAction = (fn) =>
+    action(async () => {
+      if (!syncConfigured)
+        throw Error(
+          "Private sync is awaiting live access tests. Plans stay on this device.",
+        );
+      return fn();
+    });
   const lock = async (fn) => {
     if (!navigator.locks) return fn();
     return navigator.locks.request(
@@ -239,6 +260,14 @@ export async function initSyncUI({
   async function refreshUser(autoSync = true) {
     const user = await provider.user();
     currentUser = user;
+    if (!syncConfigured) {
+      engine.setStatus(
+        "auth-only",
+        "Account verified. Private sync is awaiting live access tests. Plans stay on this device.",
+      );
+      render();
+      return;
+    }
     if (recoveryMode) {
       render();
       return;
@@ -326,15 +355,15 @@ export async function initSyncUI({
     });
   };
   $("sync-connect").onclick = () =>
-    void action(async () => {
+    void syncAction(async () => {
       if (!currentUser) throw Error("Sign in first.");
       await engine.connect(currentUser.id);
       await engine.syncNow();
     });
-  $("sync-now").onclick = () => void action(() => engine.syncNow());
+  $("sync-now").onclick = () => void syncAction(() => engine.syncNow());
   $("sync-verify").onclick = () =>
-    void action(() => engine.syncNow({ verifyFiles: true }));
-  $("sync-repair").onclick = () => void action(() => engine.repairFiles());
+    void syncAction(() => engine.syncNow({ verifyFiles: true }));
+  $("sync-repair").onclick = () => void syncAction(() => engine.repairFiles());
   $("sync-signout").onclick = () =>
     void action(async () => {
       engine.pause();
@@ -353,17 +382,17 @@ export async function initSyncUI({
         s.value,
       ]),
     );
-    void action(async () => {
+    void syncAction(async () => {
       await engine.resolve(choices);
       if (!engine.state?.conflict) await engine.syncNow();
     });
   };
   $("sync-recovery-download").onclick = () =>
-    void action(async () => localDownload(await engine.recoveryBackup()));
+    void syncAction(async () => localDownload(await engine.recoveryBackup()));
   $("sync-recovery-restore").onclick = () =>
-    void action(() => engine.restoreRecovery());
+    void syncAction(() => engine.restoreRecovery());
   $("sync-cleanup-open").onclick = () =>
-    void action(async () => {
+    void syncAction(async () => {
       const reservations = await engine.reservations(),
         state = engine.state,
         used = new Set(
@@ -409,7 +438,7 @@ export async function initSyncUI({
       ),
     ].map((e) => e.value);
     if (!ids.length) return;
-    void action(async () => {
+    void syncAction(async () => {
       const removed = await engine.cleanup(ids);
       $("sync-cleanup").hidden = true;
       engine.setStatus(
@@ -433,6 +462,7 @@ export async function initSyncUI({
   document.addEventListener("ptp-local-reset", captureChanges);
   const resume = () => {
     if (
+      syncConfigured &&
       !disposed &&
       currentUser &&
       engine?.owner &&
@@ -468,7 +498,7 @@ export async function initSyncUI({
           "signed-out",
           callback.code
             ? "The link could not be verified here. It may be expired or opened in a different browser. Sign in after confirmation or request a new recovery link."
-            : "Sign in with your confirmed individual account to connect private sync.",
+            : signInMessage,
         );
       } else
         engine?.setStatus(
@@ -476,7 +506,7 @@ export async function initSyncUI({
           error.message,
         );
     }
-    poll = setInterval(resume, 60000);
+    if (syncConfigured) poll = setInterval(resume, 60000);
   } else if (callback.code || callback.failed) {
     $("sync-message").textContent =
       "Private sync is not configured; this link was not exchanged. Its parameters were removed. Plans stay on this device.";
