@@ -340,8 +340,12 @@ CREATE POLICY planner_bucket_no_client_delete ON storage.buckets AS RESTRICTIVE
 
 -- Gate is restrictive: existing broad permissive policies cannot expose this
 -- bucket. It does not broaden or revoke access for other buckets.
+-- Anonymous policy must contain no protected helper calls: PostgreSQL checks
+-- function EXECUTE grants even for unrelated buckets before OR short-circuiting.
+CREATE POLICY planner_bucket_anon_gate ON storage.objects AS RESTRICTIVE
+  FOR ALL TO anon USING (bucket_id <> 'planner-attachments') WITH CHECK (bucket_id <> 'planner-attachments');
 CREATE POLICY planner_bucket_owner_gate ON storage.objects AS RESTRICTIVE
-  FOR ALL TO anon, authenticated
+  FOR ALL TO authenticated
   USING (bucket_id <> 'planner-attachments' OR
     (current_user = 'authenticated' AND planner_private.owns_object(name)))
   WITH CHECK (bucket_id <> 'planner-attachments' OR
@@ -353,10 +357,10 @@ CREATE POLICY planner_bucket_no_overwrite ON storage.objects AS RESTRICTIVE
   USING (bucket_id <> 'planner-attachments')
   WITH CHECK (bucket_id <> 'planner-attachments');
 CREATE POLICY planner_files_reserved_upload ON storage.objects AS RESTRICTIVE
-  FOR INSERT TO anon, authenticated WITH CHECK (bucket_id <> 'planner-attachments' OR
+  FOR INSERT TO authenticated WITH CHECK (bucket_id <> 'planner-attachments' OR
     (current_user = 'authenticated' AND planner_private.can_upload_object(name,metadata)));
 CREATE POLICY planner_files_unreferenced_delete ON storage.objects AS RESTRICTIVE
-  FOR DELETE TO anon, authenticated USING (bucket_id <> 'planner-attachments' OR
+  FOR DELETE TO authenticated USING (bucket_id <> 'planner-attachments' OR
     (current_user = 'authenticated' AND planner_private.can_delete_object(name)));
 CREATE POLICY planner_files_read ON storage.objects FOR SELECT TO authenticated
   USING (bucket_id = 'planner-attachments' AND planner_private.owns_object(name));

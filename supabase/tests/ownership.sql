@@ -37,11 +37,10 @@ SELECT public.test_error('SELECT planner_api.read_document()','42501','anonymous
 SELECT public.test_error($q$ SELECT planner_api.commit_document(0,'{"version":1,"trips":[]}','[]') $q$,'42501','anonymous RPC creation denied');
 WITH edited AS (UPDATE storage.buckets SET public=true WHERE id='planner-attachments' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM edited)=0, 'anonymous caller cannot publish protected bucket');
 SELECT public.test_error('SELECT * FROM planner_private.documents','42501','anonymous document listing denied');
--- An anon role cannot even resolve the protected helper/schema; denial is safe.
-SELECT public.test_error($q$ SELECT * FROM storage.objects WHERE bucket_id='planner-attachments' $q$,'42501','anonymous file listing/read denied');
+SELECT public.test_assert((SELECT count(*) FROM storage.objects WHERE bucket_id='planner-attachments')=0,'anonymous file listing/read excludes protected objects');
 SELECT public.test_error($q$ INSERT INTO storage.objects(bucket_id,name) VALUES ('planner-attachments','11111111-1111-4111-8111-111111111111/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb') $q$,'42501','anonymous file creation denied');
-SELECT public.test_error($q$ UPDATE storage.objects SET metadata='{}' WHERE bucket_id='planner-attachments' $q$,'42501','anonymous file alteration denied');
-SELECT public.test_error($q$ DELETE FROM storage.objects WHERE bucket_id='planner-attachments' $q$,'42501','anonymous file deletion denied');
+WITH edited AS (UPDATE storage.objects SET metadata='{}' WHERE bucket_id='planner-attachments' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM edited)=0,'anonymous file alteration affects zero rows');
+WITH removed AS (DELETE FROM storage.objects WHERE bucket_id='planner-attachments' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM removed)=0,'anonymous file deletion affects zero rows');
 
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','22222222-2222-4222-8222-222222222222',false);
@@ -97,4 +96,26 @@ SELECT public.test_error($q$ INSERT INTO storage.objects(bucket_id,name,metadata
 SELECT public.test_assert(planner_api.release_file_object(md5('fictional-byte-1')::uuid),'releasing absent own ID is idempotent and cannot release other owner reservation');
 SELECT set_config('request.jwt.claim.sub','22222222-2222-4222-8222-222222222222',false);
 SELECT public.test_assert(jsonb_array_length(planner_api.list_file_objects())=4,'first user release cannot alter second user reservations');
+RESET ROLE;
+
+-- Unrelated buckets keep their preexisting policy behavior for both roles.
+RESET ROLE;
+INSERT INTO storage.buckets(id,name,public) VALUES('unrelated-fictional','unrelated-fictional',false);
+SET ROLE anon;
+SELECT set_config('request.jwt.claim.sub','',false);
+INSERT INTO storage.objects(bucket_id,name,metadata) VALUES('unrelated-fictional','dummy-anon','{"size":1}');
+SELECT public.test_assert((SELECT count(*) FROM storage.objects WHERE bucket_id='unrelated-fictional')=1,'anonymous unrelated-bucket create/list/read keeps existing access');
+WITH edited AS (UPDATE storage.objects SET metadata='{"size":2}' WHERE bucket_id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM edited)=1,'anonymous unrelated-bucket update keeps existing access');
+WITH removed AS (DELETE FROM storage.objects WHERE bucket_id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM removed)=1,'anonymous unrelated-bucket delete keeps existing access');
+WITH edited AS (UPDATE storage.buckets SET file_size_limit=100 WHERE id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM edited)=1,'anonymous unrelated bucket metadata update keeps existing access');
+INSERT INTO storage.buckets(id,name,public) VALUES('another-fictional','another-fictional',false);
+WITH removed AS (DELETE FROM storage.buckets WHERE id='another-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM removed)=1,'anonymous unrelated bucket create/delete keeps existing access');
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);
+INSERT INTO storage.objects(bucket_id,name,metadata) VALUES('unrelated-fictional','dummy-authenticated','{"size":1}');
+SELECT public.test_assert((SELECT count(*) FROM storage.objects WHERE bucket_id='unrelated-fictional')=1,'authenticated unrelated-bucket create/list/read keeps existing access');
+WITH edited AS (UPDATE storage.objects SET metadata='{"size":2}' WHERE bucket_id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM edited)=1,'authenticated unrelated-bucket update keeps existing access');
+WITH removed AS (DELETE FROM storage.objects WHERE bucket_id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM removed)=1,'authenticated unrelated-bucket delete keeps existing access');
+WITH edited AS (UPDATE storage.buckets SET file_size_limit=200 WHERE id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM edited)=1,'authenticated unrelated bucket metadata update keeps existing access');
+WITH removed AS (DELETE FROM storage.buckets WHERE id='unrelated-fictional' RETURNING 1) SELECT public.test_assert((SELECT count(*) FROM removed)=1,'authenticated unrelated bucket delete keeps existing access');
 RESET ROLE;
