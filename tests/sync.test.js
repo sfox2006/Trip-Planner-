@@ -16,6 +16,7 @@ import {
   PROJECT_URL,
 } from "../sync-model.js";
 import {
+  authConfigurationReady,
   configurationReady,
   takeAuthCallback,
   appScope,
@@ -243,6 +244,7 @@ async function attachment(planner) {
 
 test("release gate is disabled by default; rejects partial setup and secret/JWT keys", () => {
   const ready = {
+    authEnabled: true,
     enabled: true,
     policiesVerified: true,
     projectUrl: PROJECT_URL,
@@ -250,8 +252,15 @@ test("release gate is disabled by default; rejects partial setup and secret/JWT 
   };
   assert(configurationReady(ready));
   assert.equal(cloudCSP(ready), "connect-src " + PROJECT_URL);
+  const authOnly = { ...ready, enabled: false, policiesVerified: false };
+  assert(authConfigurationReady(authOnly));
+  assert(!configurationReady(authOnly));
+  assert.equal(cloudCSP(authOnly), "connect-src " + PROJECT_URL);
   for (const config of [
     { ...ready, policiesVerified: false },
+    { ...ready, authEnabled: false },
+    { ...authOnly, policiesVerified: true },
+    { ...authOnly, publishableKey: "sb_secret_fictional" },
     { ...ready, publishableKey: "sb_secret_fictional" },
     { ...ready, projectUrl: "https://other.example" },
     { ...ready, secret: "fictional must be rejected" },
@@ -261,6 +270,7 @@ test("release gate is disabled by default; rejects partial setup and secret/JWT 
   }
   assert.equal(
     cloudCSP({
+      authEnabled: false,
       enabled: false,
       policiesVerified: false,
       projectUrl: "",

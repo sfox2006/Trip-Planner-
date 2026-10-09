@@ -6,21 +6,29 @@ export function configurationShape(config) {
     config &&
     typeof config === "object" &&
     !Array.isArray(config) &&
-    Object.keys(config).length === 4 &&
-    ["enabled", "policiesVerified", "projectUrl", "publishableKey"].every(
-      (key) => Object.hasOwn(config, key),
-    ),
+    Object.keys(config).length === 5 &&
+    [
+      "authEnabled",
+      "enabled",
+      "policiesVerified",
+      "projectUrl",
+      "publishableKey",
+    ].every((key) => Object.hasOwn(config, key)),
   );
 }
-export function configurationReady(config) {
+export function authConfigurationReady(config) {
   return (
     configurationShape(config) &&
-    config.enabled === true &&
-    config.policiesVerified === true &&
+    config.authEnabled === true &&
+    typeof config.enabled === "boolean" &&
+    config.policiesVerified === config.enabled &&
     config.projectUrl === PROJECT_URL &&
     typeof config.publishableKey === "string" &&
     /^sb_publishable_[A-Za-z0-9_-]{12,}$/.test(config.publishableKey)
   );
+}
+export function configurationReady(config) {
+  return authConfigurationReady(config) && config.enabled === true;
 }
 export function takeAuthCallback(
   locationObject = location,
@@ -90,8 +98,19 @@ export async function createProvider(
   config,
   { remember = false, scope = appScope() } = {},
 ) {
-  if (!configurationReady(config))
-    throw Error("Private sync is not configured or policy-verified.");
+  if (!authConfigurationReady(config))
+    throw Error("Account sign-in is not configured.");
+  config = Object.freeze({ ...config });
+  const syncReady = configurationReady(config);
+  const requireSync = () => {
+    if (!syncReady) {
+      const error = Error(
+        "Private sync is awaiting live access tests. Plans stay on this device.",
+      );
+      error.code = "release-gate";
+      throw error;
+    }
+  };
   const { createClient } = await import("./vendor/supabase.mjs");
   const key = "personal-trip-planner.auth." + encodeURIComponent(scope);
   let closed = false,
@@ -140,6 +159,7 @@ export async function createProvider(
       !/^\/(auth|rest|storage)\/v1\//.test(requestURL.pathname)
     )
       throw Error("Unexpected private-sync endpoint blocked.");
+    if (!requestURL.pathname.startsWith("/auth/v1/")) requireSync();
     const controller = new AbortController(),
       timeout = setTimeout(() => controller.abort(), 30000);
     const abort = () => controller.abort();
@@ -264,15 +284,21 @@ export async function createProvider(
     };
   };
   const user = async () => (await authorized()).user;
-  const assertOwner = async (owner) => (await authorized(owner)).user;
+  const assertOwner = async (owner) => {
+    requireSync();
+    return (await authorized(owner)).user;
+  };
   const rpc = async (owner, name, args) => {
+    requireSync();
     const authorizedClient = (await authorized(owner)).client;
     return checked(
       await authorizedClient.schema("planner_api").rpc(name, args),
     );
   };
-  const bucket = async (owner) =>
-    (await authorized(owner)).client.storage.from(BUCKET);
+  const bucket = async (owner) => {
+    requireSync();
+    return (await authorized(owner)).client.storage.from(BUCKET);
+  };
   const path = (owner, objectId) => {
     if (!UUID.test(owner) || !UUID.test(objectId))
       throw Error("Invalid private object identity.");

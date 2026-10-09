@@ -6,6 +6,7 @@ import { emptyDocument, PROJECT_URL } from "../sync-model.js";
 const A = "11111111-1111-4111-8111-111111111111",
   B = "22222222-2222-4222-8222-222222222222";
 const config = {
+  authEnabled: true,
   enabled: true,
   policiesVerified: true,
   projectUrl: PROJECT_URL,
@@ -185,6 +186,87 @@ test("every data write uses the exact server-verified owner token across account
     assert.equal(localStorage.getItem(key), null);
     assert.equal(sessionStorage.getItem(key), null);
     await assert.rejects(provider.commit(A, "0", emptyDocument()));
+  } finally {
+    provider?.close();
+    Object.assign(globalThis, original);
+  }
+});
+
+test("Auth-only mode verifies accounts but refuses every planner and Storage operation before a data request, including after config mutation", async () => {
+  const original = {
+    fetch: globalThis.fetch,
+    location: globalThis.location,
+    localStorage: globalThis.localStorage,
+    sessionStorage: globalThis.sessionStorage,
+  };
+  globalThis.location = { href: "https://fictional.example/Trip-Planner-/" };
+  globalThis.localStorage = storage();
+  globalThis.sessionStorage = storage();
+  const requests = [],
+    token = jwt(A);
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(input);
+    requests.push(url.pathname);
+    assert(
+      url.pathname.startsWith("/auth/v1/"),
+      "data endpoint must never be reached",
+    );
+    if (url.pathname.endsWith("/token"))
+      return Response.json({
+        access_token: token,
+        refresh_token: "fictional invalid refresh token",
+        expires_in: 3600,
+        token_type: "bearer",
+        user: authUser(A),
+      });
+    if (url.pathname.endsWith("/user")) return Response.json(authUser(A));
+    if (
+      url.pathname.endsWith("/signup") ||
+      url.pathname.endsWith("/resend") ||
+      url.pathname.endsWith("/recover")
+    ) {
+      const body = JSON.parse(options.body);
+      assert.equal(body.email, "a@example.test");
+      assert.equal(url.searchParams.get("redirect_to"), location.href);
+      return Response.json({});
+    }
+    if (url.pathname.endsWith("/logout"))
+      return new Response(null, { status: 204 });
+    throw Error("Unexpected fictional Auth endpoint");
+  };
+  let provider;
+  try {
+    const authOnly = { ...config, enabled: false, policiesVerified: false };
+    provider = await createProvider(authOnly);
+    await provider.signUp("a@example.test", "Fictional test password");
+    await provider.resend("a@example.test");
+    await provider.recover("a@example.test");
+    assert.deepEqual(
+      await provider.signIn("a@example.test", "Fictional test password"),
+      { id: A, email: "a@example.test" },
+    );
+    assert.deepEqual(await provider.user(), { id: A, email: "a@example.test" });
+    authOnly.enabled = authOnly.policiesVerified = true;
+    const file = {
+      objectId: "33333333-3333-4333-8333-333333333333",
+      type: "image/png",
+      size: 8,
+    };
+    const before = requests.length;
+    for (const operation of [
+      () => provider.assertOwner(A),
+      () => provider.read(A),
+      () => provider.commit(A, "0", emptyDocument()),
+      () => provider.reserve(A, file),
+      () => provider.upload(A, file, new Blob(["fictional"])),
+      () => provider.download(A, file),
+      () => provider.listObjects(A),
+      () => provider.remove(A, file.objectId),
+      () => provider.release(A, file.objectId),
+    ])
+      await assert.rejects(operation(), (e) => e.code === "release-gate");
+    assert.equal(requests.length, before);
+    await provider.signOut();
   } finally {
     provider?.close();
     Object.assign(globalThis, original);
