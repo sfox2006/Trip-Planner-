@@ -1,6 +1,6 @@
 # Supabase review validation
 
-Validated October9,2026. **No live Supabase SQL/settings/byte API was used.** No backend resource was provisioned and no actual user/password/session credential or personal travel data was used.
+Validated October9,2026. **No live Supabase writes or byte-API tests were performed.** An authorized parent-agent read-only project/catalog audit is described in the contract; it is not a live integration test. No backend resource was provisioned and no actual user/password/session credential or personal travel data was used.
 
 The exact review migration parsed and committed in PostgreSQL17 (`postgres:17-alpine`, downloaded digest`sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24`) in a disposable Docker container with networking disabled, no exposed ports and no persistent volumes. The local harness implements only minimal Auth subject/confirmation columns and Storage metadata tables. It includes adversarial broad object/bucket policies to check restrictive protections; those adversarial policies are not in the production migration.
 
